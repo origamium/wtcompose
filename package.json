@@ -1,0 +1,32 @@
+{
+  "name": "wtcompose",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "bin": {
+    "wtcompose": "dist/index.js"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "lint": "biome lint src/",
+    "format": "biome format --write src/",
+    "check": "biome check --write src/",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": ["cli", "typescript", "commander"],
+  "author": "",
+  "license": "ISC",
+  "description": "CLI tool built with TypeScript and Commander.js",
+  "devDependencies": {
+    "@biomejs/biome": "^2.2.4",
+    "@types/node": "^24.4.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "commander": "^14.0.1"
+  }
+}

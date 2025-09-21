@@ -37,11 +37,17 @@ export interface ComposeConfig {
 /**
  * Execute a shell command and return the output
  */
-export function execCommand(command: string): string {
+export function execCommand(command: string, options?: { cwd?: string }): string {
   try {
-    return execSync(command, { encoding: "utf-8", stdio: "pipe" }).trim()
+    const execOptions = {
+      encoding: "utf-8" as const,
+      stdio: "pipe" as const,
+      ...(options?.cwd && { cwd: options.cwd })
+    }
+    return execSync(command, execOptions).trim()
   } catch (error: any) {
-    throw new Error(`Command failed: ${command}\n${error.message}`)
+    throw new Error(`Command failed: ${command}
+${error.message}`)
   }
 }
 

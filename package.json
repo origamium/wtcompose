@@ -16,17 +16,25 @@
     "typecheck": "tsc --noEmit",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["cli", "typescript", "commander"],
+  "keywords": [
+    "cli",
+    "typescript",
+    "commander"
+  ],
   "author": "",
   "license": "ISC",
   "description": "CLI tool built with TypeScript and Commander.js",
   "devDependencies": {
     "@biomejs/biome": "^2.2.4",
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^24.4.0",
     "tsx": "^4.20.5",
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "commander": "^14.0.1"
+    "commander": "^14.0.1",
+    "fs-extra": "^11.3.1",
+    "simple-git": "^3.28.0",
+    "yaml": "^2.8.1"
   }
 }

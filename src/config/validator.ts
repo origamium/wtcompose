@@ -73,10 +73,17 @@ export function validateEnvVarName(name: string): boolean {
  * Suggest corrections for invalid environment variable names
  */
 export function suggestEnvVarName(name: string): string {
-  return name
+  const result = name
     .toUpperCase()
     .replace(/[^A-Z0-9_]/g, "_")
     .replace(/^([0-9])/, "_$1") // Can't start with number
     .replace(/_+/g, "_") // Remove duplicate underscores
-    .replace(/^_+|_+$/g, "") // Remove leading/trailing underscores
+    .replace(/_+$/g, "") // Remove trailing underscores only
+
+  // Only remove leading underscores if they weren't added to fix number start
+  if (result.startsWith("_") && !/^_[0-9]/.test(result)) {
+    return result.replace(/^_+/, "")
+  }
+
+  return result
 }

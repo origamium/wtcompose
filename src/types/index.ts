@@ -1,0 +1,190 @@
+/**
+ * @fileoverview 共通型定義
+ * WTurbo CLI で使用されるすべての型定義を統合管理
+ */
+
+// =============================================================================
+// Configuration Types
+// =============================================================================
+
+/**
+ * 環境変数設定
+ */
+export interface EnvConfig {
+  /** 環境変数ファイルのパス一覧 */
+  file: string[]
+  /** 環境変数の調整設定 */
+  adjust: Record<string, string | number | null>
+}
+
+/**
+ * WTurbo設定ファイルの型定義
+ */
+export interface WTurboConfig {
+  /** ベースブランチ名 */
+  base_branch: string
+  /** Docker Composeファイルのパス */
+  docker_compose_file: string
+  /** 環境変数設定 */
+  env: EnvConfig
+}
+
+// =============================================================================
+// Git Types
+// =============================================================================
+
+/**
+ * Git worktree情報
+ */
+export interface WorktreeInfo {
+  /** worktreeのパス */
+  path: string
+  /** ブランチ名 */
+  branch: string
+  /** HEADのコミットハッシュ */
+  head: string
+}
+
+// =============================================================================
+// Docker Types
+// =============================================================================
+
+/**
+ * Dockerコンテナ情報
+ */
+export interface ContainerInfo {
+  /** コンテナID */
+  id: string
+  /** コンテナ名 */
+  name: string
+  /** イメージ名 */
+  image: string
+  /** ステータス */
+  status: string
+  /** ポートマッピング */
+  ports: string[]
+  /** ボリュームマウント */
+  volumes: string[]
+  /** ネットワーク */
+  networks: string[]
+}
+
+/**
+ * Dockerボリューム情報
+ */
+export interface VolumeInfo {
+  /** ボリューム名 */
+  name: string
+  /** ドライバー */
+  driver: string
+  /** マウントポイント */
+  mountpoint: string
+}
+
+/**
+ * Docker Composeサービス定義
+ */
+export interface ComposeService {
+  /** イメージ名 */
+  image?: string
+  /** ビルド設定 */
+  build?: string | object
+  /** ポートマッピング */
+  ports?: string[]
+  /** ボリュームマウント */
+  volumes?: string[]
+  /** 環境変数 */
+  environment?: Record<string, string> | string[]
+  /** ネットワーク */
+  networks?: string[]
+  /** 依存関係 */
+  depends_on?: string[]
+  /** その他の設定 */
+  [key: string]: any
+}
+
+/**
+ * Docker Compose設定
+ */
+export interface ComposeConfig {
+  /** Composeファイルのバージョン */
+  version: string
+  /** サービス定義 */
+  services: Record<string, ComposeService>
+  /** ボリューム定義 */
+  volumes?: Record<string, any>
+  /** ネットワーク定義 */
+  networks?: Record<string, any>
+  /** その他の設定 */
+  [key: string]: any
+}
+
+// =============================================================================
+// CLI Types
+// =============================================================================
+
+/**
+ * コマンドオプション
+ */
+export interface CommandOptions {
+  /** ブランチ名 */
+  branch?: string
+  /** ビルドフラグ */
+  build?: boolean
+  /** 削除フラグ */
+  remove?: boolean
+  /** 全体表示フラグ */
+  all?: boolean
+  /** Docker専用表示フラグ */
+  dockerOnly?: boolean
+}
+
+/**
+ * コマンド実行コンテキスト
+ */
+export interface CommandContext {
+  /** 現在の作業ディレクトリ */
+  cwd: string
+  /** 設定オブジェクト */
+  config: WTurboConfig
+  /** コマンドオプション */
+  options: CommandOptions
+}
+
+// =============================================================================
+// Utility Types
+// =============================================================================
+
+/**
+ * ファイル操作のオプション
+ */
+export interface FileOperationOptions {
+  /** 作業ディレクトリ */
+  cwd?: string
+  /** エンコーディング */
+  encoding?: BufferEncoding
+  /** バックアップ作成フラグ */
+  createBackup?: boolean
+}
+
+/**
+ * 実行コマンドのオプション
+ */
+export interface ExecOptions {
+  /** 作業ディレクトリ */
+  cwd?: string
+  /** 環境変数 */
+  env?: Record<string, string>
+  /** タイムアウト（ミリ秒） */
+  timeout?: number
+}
+
+/**
+ * エラー情報
+ */
+export interface WTurboError extends Error {
+  /** エラーコード */
+  code: string
+  /** 詳細情報 */
+  details?: Record<string, any>
+}

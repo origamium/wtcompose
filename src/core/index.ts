@@ -14,6 +14,7 @@ export * from './git/worktree.js'
 // Docker operations
 export * from './docker/client.js'
 export * from './docker/compose.js'
+export * from './docker/volume.js'
 
 // Environment processing
 export * from './environment/processor.js'

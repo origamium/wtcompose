@@ -3,7 +3,8 @@
  * WTurbo設定ファイルの検証と環境変数名の正規化を担当
  */
 
-import * as fs from 'fs-extra'
+import fs from 'fs-extra'
+import { existsSync } from 'node:fs'
 import * as path from 'node:path'
 import type { WTurboConfig } from '../../types/index.js'
 import { ENV_VAR_PATTERNS } from '../../constants/index.js'
@@ -59,7 +60,7 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
     })
   } else {
     const composePath = path.resolve(configDir, config.docker_compose_file)
-    if (!fs.existsSync(composePath)) {
+    if (!existsSync(composePath)) {
       errors.push({
         message: `docker_compose_file not found: ${config.docker_compose_file}`,
         field: 'docker_compose_file',
@@ -93,7 +94,7 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
           })
         } else {
           const envPath = path.resolve(configDir, envFile)
-          if (!fs.existsSync(envPath)) {
+          if (!existsSync(envPath)) {
             console.log(`⚠️  Environment file not found: ${envFile}`)
           }
         }

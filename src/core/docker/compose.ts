@@ -3,7 +3,8 @@
  * Docker Composeファイルの読み込み、書き込み、ポート調整を担当
  */
 
-import * as fs from 'fs-extra'
+import fs from 'fs-extra'
+import { existsSync } from 'node:fs'
 import { parse, stringify } from 'yaml'
 import type { ComposeConfig, FileOperationOptions } from '../../types/index.js'
 import { COMPOSE_FILE_NAMES, PORT_RANGE, FILE_ENCODING } from '../../constants/index.js'
@@ -28,7 +29,7 @@ import { COMPOSE_FILE_NAMES, PORT_RANGE, FILE_ENCODING } from '../../constants/i
  */
 export function readComposeFile(filePath: string, options?: FileOperationOptions): ComposeConfig {
   try {
-    if (!fs.existsSync(filePath)) {
+    if (!existsSync(filePath)) {
       throw new Error(`Docker Compose file not found: ${filePath}`)
     }
 
@@ -81,7 +82,7 @@ export function writeComposeFile(
 ): void {
   try {
     // バックアップ作成（オプション）
-    if (options?.createBackup && fs.existsSync(filePath)) {
+    if (options?.createBackup && existsSync(filePath)) {
       const backupPath = `${filePath}.backup`
       fs.copyFileSync(filePath, backupPath)
       console.log(`📋 Created backup: ${backupPath}`)
@@ -210,7 +211,7 @@ export function findAvailablePort(basePort: number, usedPorts: number[]): number
 export function findComposeFile(projectDir: string): string | null {
   for (const fileName of COMPOSE_FILE_NAMES) {
     const filePath = `${projectDir}/${fileName}`
-    if (fs.existsSync(filePath)) {
+    if (existsSync(filePath)) {
       return filePath
     }
   }

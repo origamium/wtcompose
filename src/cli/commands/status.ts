@@ -20,7 +20,7 @@ import {
 import { readComposeFile, findComposeFile } from '../../core/docker/compose.js'
 
 // Utils
-import { existsSync } from 'fs-extra'
+import { existsSync } from 'node:fs'
 
 /**
  * statusコマンドを作成

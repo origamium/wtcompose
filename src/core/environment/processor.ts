@@ -3,7 +3,8 @@
  * .envファイルの読み込み、書き込み、値の調整を担当
  */
 
-import * as fs from 'fs-extra'
+import fs from 'fs-extra'
+import { existsSync } from 'node:fs'
 import * as path from 'node:path'
 import type { FileOperationOptions } from '../../types/index.js'
 import { FILE_ENCODING, BACKUP_EXTENSION } from '../../constants/index.js'
@@ -56,7 +57,7 @@ interface ParsedEnvFile {
  */
 export function parseEnvFile(filePath: string, options?: FileOperationOptions): ParsedEnvFile {
   try {
-    if (!fs.existsSync(filePath)) {
+    if (!existsSync(filePath)) {
       throw new Error(`Environment file not found: ${filePath}`)
     }
 
@@ -207,7 +208,7 @@ export function writeEnvFile(
 ): void {
   try {
     // バックアップ作成（オプション）
-    if (options?.createBackup && fs.existsSync(filePath)) {
+    if (options?.createBackup && existsSync(filePath)) {
       const backupPath = `${filePath}${BACKUP_EXTENSION}`
       fs.copyFileSync(filePath, backupPath)
       console.log(`📋 Created backup: ${backupPath}`)
@@ -217,7 +218,7 @@ export function writeEnvFile(
     
     // ディレクトリが存在しない場合は作成
     const dir = path.dirname(filePath)
-    if (!fs.existsSync(dir)) {
+    if (!existsSync(dir)) {
       fs.mkdirpSync(dir)
     }
 
@@ -322,7 +323,7 @@ export function backupEnvFile(filePath: string, backupSuffix?: string): string {
   const suffix = backupSuffix || BACKUP_EXTENSION
   const backupPath = `${filePath}${suffix}`
   
-  if (fs.existsSync(filePath)) {
+  if (existsSync(filePath)) {
     fs.copyFileSync(filePath, backupPath)
     console.log(`📋 Created backup: ${backupPath}`)
   }
@@ -351,7 +352,7 @@ export function restoreEnvFile(filePath: string, backupSuffix?: string): void {
   const suffix = backupSuffix || BACKUP_EXTENSION
   const backupPath = `${filePath}${suffix}`
   
-  if (!fs.existsSync(backupPath)) {
+  if (!existsSync(backupPath)) {
     throw new Error(`Backup file not found: ${backupPath}`)
   }
   

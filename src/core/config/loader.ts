@@ -3,7 +3,8 @@
  * WTurbo設定ファイルの検索、読み込み、デフォルト値とのマージを担当
  */
 
-import * as fs from 'fs-extra'
+import fs from 'fs-extra'
+import { existsSync } from 'node:fs'
 import * as path from 'node:path'
 import { parse } from 'yaml'
 import type { WTurboConfig } from '../../types/index.js'
@@ -36,7 +37,7 @@ interface ConfigFileResult {
 export function findConfigFile(startDir: string = process.cwd()): ConfigFileResult {
   for (const fileName of CONFIG_FILE_NAMES) {
     const configPath = path.resolve(startDir, fileName)
-    if (fs.existsSync(configPath)) {
+    if (existsSync(configPath)) {
       return { path: configPath, exists: true }
     }
   }
@@ -188,7 +189,7 @@ export function loadConfig(configDir: string = process.cwd()): WTurboConfig {
       const configFileDir = path.dirname(configResult.path!)
       parsed.env.file.forEach(envFile => {
         const envPath = path.resolve(configFileDir, envFile)
-        if (!fs.existsSync(envPath)) {
+        if (!existsSync(envPath)) {
           console.log(`⚠️  Environment file not found: ${envFile}`)
         }
       })

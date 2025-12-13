@@ -8,6 +8,8 @@
 import { Command } from 'commander'
 import { APP_NAME, APP_VERSION, APP_DESCRIPTION, EXIT_CODES } from '../constants/index.js'
 import { statusCommand } from './commands/status.js'
+import { createCommand } from './commands/create.js'
+import { removeCommand } from './commands/remove.js'
 
 /**
  * メインCLIプログラムを作成・設定
@@ -49,6 +51,8 @@ function createMainProgram(): Command {
 
   // サブコマンド追加
   program.addCommand(statusCommand())
+  program.addCommand(createCommand())
+  program.addCommand(removeCommand())
 
   // 互換性保持のためのレガシーコマンド
   addLegacyCommands(program)

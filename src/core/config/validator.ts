@@ -69,6 +69,45 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
     }
   }
 
+  // copy_filesの検証
+  if (config.copy_files !== undefined) {
+    if (!Array.isArray(config.copy_files)) {
+      errors.push({
+        message: 'copy_files must be an array',
+        field: 'copy_files',
+        severity: 'error'
+      })
+    } else {
+      config.copy_files.forEach((copyFile, index) => {
+        if (typeof copyFile !== 'string') {
+          errors.push({
+            message: `copy_files[${index}] must be a string`,
+            field: `copy_files[${index}]`,
+            severity: 'error'
+          })
+        }
+      })
+    }
+  }
+
+  // start_commandの検証
+  if (config.start_command !== undefined && typeof config.start_command !== 'string') {
+    errors.push({
+      message: 'start_command must be a string',
+      field: 'start_command',
+      severity: 'error'
+    })
+  }
+
+  // end_commandの検証
+  if (config.end_command !== undefined && typeof config.end_command !== 'string') {
+    errors.push({
+      message: 'end_command must be a string',
+      field: 'end_command',
+      severity: 'error'
+    })
+  }
+
   // env設定の検証
   if (!config.env || typeof config.env !== 'object') {
     errors.push({

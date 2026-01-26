@@ -18,7 +18,7 @@ import { DOCKER_COMMANDS, FILE_ENCODING, WTCOMPOSE_PREFIX } from '../../constant
 function execDockerCommand(command: string, options?: ExecOptions): string {
   try {
     const execOptions = {
-      encoding: FILE_ENCODING as const,
+      encoding: FILE_ENCODING,
       stdio: 'pipe' as const,
       ...(options?.cwd && { cwd: options.cwd }),
       ...(options?.env && { env: { ...process.env, ...options.env } })
@@ -70,24 +70,26 @@ function parseContainerList(output: string): ContainerInfo[] {
     return []
   }
 
-  return output.split('\n').map(line => {
+  const containers: ContainerInfo[] = []
+  for (const line of output.split('\n')) {
     const parts = line.split('\t')
     if (parts.length < 4) {
-      return null
+      continue
     }
 
     const [id, name, image, status, ports = ''] = parts
-    
-    return {
+
+    containers.push({
       id: id.trim(),
       name: name.trim(),
       image: image.trim(),
       status: status.trim(),
       ports: ports.split(',').map(p => p.trim()).filter(p => p.length > 0),
-      volumes: [], // 後で個別に取得
-      networks: [] // 後で個別に取得
-    }
-  }).filter((container): container is ContainerInfo => container !== null)
+      volumes: [] as string[], // 後で個別に取得
+      networks: [] as string[] // 後で個別に取得
+    })
+  }
+  return containers
 }
 
 /**

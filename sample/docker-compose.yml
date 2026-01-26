@@ -1,0 +1,67 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: sample_postgres
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-secret}
+      POSTGRES_DB: ${DB_NAME:-sample_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sample_network
+
+  # Next.js Application
+  nextjs:
+    build:
+      context: ./next-app
+      dockerfile: Dockerfile
+    container_name: sample_nextjs
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      DATABASE_URL: postgres://${DB_USER:-postgres}:${DB_PASSWORD:-secret}@postgres:5432/${DB_NAME:-sample_db}
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    volumes:
+      - ./next-app:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - sample_network
+
+  # Debian Development Container
+  debian:
+    image: debian:bookworm-slim
+    container_name: sample_debian
+    command: tail -f /dev/null
+    environment:
+      APP_ENV: ${APP_ENV:-development}
+      DEBUG: ${DEBUG:-true}
+    volumes:
+      - ./scripts:/scripts
+      - shared_data:/shared
+    networks:
+      - sample_network
+
+volumes:
+  postgres_data:
+  shared_data:
+
+networks:
+  sample_network:
+    driver: bridge

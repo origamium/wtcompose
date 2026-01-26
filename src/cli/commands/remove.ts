@@ -3,12 +3,16 @@
  * Git worktreeの削除を担当
  */
 
+import * as path from 'node:path'
+import { existsSync } from 'node:fs'
+import { execSync } from 'node:child_process'
 import { Command } from 'commander'
 import { EXIT_CODES } from '../../constants/index.js'
 
 // Core modules
 import { isGitRepository, getGitRoot } from '../../core/git/repository.js'
 import { removeWorktree, getWorktreePath, listWorktrees } from '../../core/git/worktree.js'
+import { loadConfig } from '../../core/config/loader.js'
 
 /**
  * removeコマンドを作成
@@ -81,6 +85,14 @@ async function executeRemoveCommand(
     console.log('⚠️  Force removal enabled')
   }
 
+  // end_commandの実行（worktree削除前）
+  const config = loadConfig(gitRoot)
+  if (config.end_command) {
+    console.log('')
+    console.log(`🛑 Running end command: ${config.end_command}`)
+    await executeEndCommand(config.end_command, worktreePath)
+  }
+
   // worktreeを削除
   removeWorktree(worktreePath)
 
@@ -99,5 +111,32 @@ async function executeRemoveCommand(
       const isMain = wt.path === gitRoot
       console.log(`  ${wt.branch}${isMain ? ' (main)' : ''}: ${wt.path}`)
     }
+  }
+}
+
+/**
+ * end_commandを実行
+ *
+ * @param command - 実行するコマンド（スクリプトパス）
+ * @param worktreePath - worktreeのパス（作業ディレクトリ）
+ */
+async function executeEndCommand(
+  command: string,
+  worktreePath: string
+): Promise<void> {
+  try {
+    // コマンドがスクリプトファイルの場合、worktree内のパスを使用
+    const commandPath = path.resolve(worktreePath, command)
+    const actualCommand = existsSync(commandPath) ? commandPath : command
+
+    execSync(actualCommand, {
+      cwd: worktreePath,
+      stdio: 'inherit',
+      shell: '/bin/sh'
+    })
+    console.log('  ✅ End command completed successfully')
+  } catch (error: any) {
+    console.log(`  ⚠️  End command failed: ${error.message}`)
+    console.log('  (Continuing with worktree removal)')
   }
 }

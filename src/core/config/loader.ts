@@ -98,9 +98,12 @@ export function mergeWithDefaults(partial: Partial<WTurboConfig>): WTurboConfig 
   return {
     base_branch: partial.base_branch || DEFAULT_CONFIG.base_branch,
     docker_compose_file: partial.docker_compose_file || DEFAULT_CONFIG.docker_compose_file,
+    copy_files: partial.copy_files || [...DEFAULT_CONFIG.copy_files],
+    start_command: partial.start_command ?? DEFAULT_CONFIG.start_command,
+    end_command: partial.end_command ?? DEFAULT_CONFIG.end_command,
     env: {
-      file: partial.env?.file || DEFAULT_CONFIG.env.file,
-      adjust: partial.env?.adjust || DEFAULT_CONFIG.env.adjust
+      file: partial.env?.file || [...DEFAULT_CONFIG.env.file],
+      adjust: partial.env?.adjust || { ...DEFAULT_CONFIG.env.adjust }
     }
   }
 }
@@ -129,6 +132,20 @@ base_branch: "${defaultConfig.base_branch}"
 
 # Docker Compose file path (relative to config file)
 docker_compose_file: "${defaultConfig.docker_compose_file}"
+
+# Files and directories to copy when creating a worktree
+# These files will be copied even if they are gitignored
+# Useful for .env files, local configuration, etc.
+copy_files:
+  # - .env
+  # - .claude
+  # - .serena
+
+# Command to run after worktree creation (e.g., install dependencies)
+# start_command: ./start-dev.sh
+
+# Command to run before worktree removal (e.g., cleanup)
+# end_command: ./stop-dev.sh
 
 # Environment configuration
 env:

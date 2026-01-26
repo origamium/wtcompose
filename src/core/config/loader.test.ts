@@ -3,7 +3,7 @@
  * 新しいディレクトリ構造に対応したテストファイル
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { existsSync, readFileSync, writeFileSync } from 'fs-extra'
 import * as path from 'node:path'
 import { parse } from 'yaml'

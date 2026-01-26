@@ -20,7 +20,7 @@ import { isGitRepository, getGitRoot } from './repository.js'
 function execGitCommand(command: string, options?: ExecOptions): string {
   try {
     const execOptions = {
-      encoding: FILE_ENCODING as const,
+      encoding: FILE_ENCODING,
       stdio: 'pipe' as const,
       ...(options?.cwd && { cwd: options.cwd }),
       ...(options?.env && { env: { ...process.env, ...options.env } })

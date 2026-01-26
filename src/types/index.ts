@@ -25,6 +25,12 @@ export interface WTurboConfig {
   base_branch: string
   /** Docker Composeファイルのパス */
   docker_compose_file: string
+  /** worktree作成時にコピーするファイル・ディレクトリ（gitignoreされているものも含む） */
+  copy_files: string[]
+  /** worktree作成後に実行するコマンド（スクリプトパス） */
+  start_command?: string
+  /** worktree削除時に実行するコマンド（スクリプトパス） */
+  end_command?: string
   /** 環境変数設定 */
   env: EnvConfig
 }

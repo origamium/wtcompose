@@ -1,0 +1,37 @@
+# WTurbo Configuration File
+# Git worktree management with Docker Compose environment isolation
+
+# Base branch for creating new worktrees
+base_branch: "main"
+
+# Docker Compose file path (relative to config file)
+docker_compose_file: "./docker-compose.yml"
+
+# Files and directories to copy when creating a worktree
+# These files will be copied even if they are gitignored
+copy_files:
+  - .env
+  - .claude
+  - .serena
+
+# Command to run after worktree creation (install dependencies, start services)
+start_command: ./start-dev.sh
+
+# Command to run before worktree removal (stop services, cleanup)
+end_command: ./stop-dev.sh
+
+# Environment configuration
+env:
+  # Environment files to copy and adjust
+  file:
+    - "./.env"
+
+  # Environment variable adjustments
+  # Values can be:
+  #   - string: direct replacement
+  #   - number: increment by this amount (for ports)
+  #   - null: remove the variable
+  adjust:
+    # Increment ports by 1000 for each worktree to avoid conflicts
+    APP_PORT: 1000
+    DB_PORT: 1000

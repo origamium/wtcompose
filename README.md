@@ -28,13 +28,22 @@ base_branch: main
 # Docker Composeファイルのパス
 docker_compose_file: ./docker-compose.yml
 
+start_command: ./start-dev.sh
+end_command: ./stop-dev.sh
+
+# コピーするファイル、ディレクトリの指定
+copy_files:
+  - .env
+  - .claude
+  - .serena
+
 # 環境変数の設定
 env:
   # 環境変数ファイルのリスト
   file:
     - .env
     - .env.local
-  
+
   # 環境変数の調整設定
   adjust:
     PORT: 3000

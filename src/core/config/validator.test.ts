@@ -32,6 +32,7 @@ describe('Config Validator (Refactored)', () => {
       const validConfig: WTurboConfig = {
         base_branch: 'main',
         docker_compose_file: './docker-compose.yaml',
+        copy_files: ['.env', '.claude'],
         env: {
           file: ['./env/prod.env', './env/dev.env'],
           adjust: {
@@ -63,6 +64,7 @@ describe('Config Validator (Refactored)', () => {
       const invalidConfig: WTurboConfig = {
         base_branch: 'main',
         docker_compose_file: './docker-compose.yaml',
+        copy_files: [],
         env: { file: ['./.env'], adjust: {} }
       }
 

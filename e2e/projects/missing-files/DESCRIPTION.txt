@@ -1,0 +1,1 @@
+Project with missing files to test error handling and graceful degradation

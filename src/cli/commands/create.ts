@@ -87,8 +87,8 @@ async function executeCreateCommand(
     console.log(`✨ Creating new branch: ${branch}`)
   }
 
-  // worktreeを作成
-  createWorktree(branch, worktreePath)
+  // worktreeを作成（既存ブランチの場合は useExistingBranch オプションを使用）
+  createWorktree(branch, worktreePath, { useExistingBranch: branchAlreadyExists })
 
   // 設定ファイルを読み込み、copy_filesに指定されたファイル/ディレクトリをコピー
   const config = loadConfig(gitRoot)

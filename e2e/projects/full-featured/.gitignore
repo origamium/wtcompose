@@ -1,0 +1,9 @@
+# Gitignored files that should be copied by copy_files
+.env
+.env.local
+.secrets
+config/local.json
+
+# Marker files from scripts
+.start-executed
+.stop-executed

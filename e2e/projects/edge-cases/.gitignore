@@ -1,0 +1,6 @@
+.env
+dir with spaces/
+deeply/
+unicode-*.txt
+.start-marker
+.stop-marker

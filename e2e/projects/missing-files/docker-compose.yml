@@ -1,0 +1,5 @@
+version: '3.8'
+services:
+  test:
+    image: alpine:latest
+    command: echo "Missing files test"

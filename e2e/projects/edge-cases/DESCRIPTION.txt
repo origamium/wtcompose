@@ -1,0 +1,1 @@
+Edge case testing: special characters, deep paths, unicode, etc.

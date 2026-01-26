@@ -89,7 +89,9 @@ export const GIT_COMMANDS = {
   BRANCH_EXISTS: "git show-ref --verify --quiet refs/heads/{branchName}",
   LIST_WORKTREES: "git worktree list --porcelain",
   CREATE_WORKTREE: "git worktree add {path} -b {branch}",
+  CREATE_WORKTREE_EXISTING: "git worktree add {path} {branch}",
   REMOVE_WORKTREE: "git worktree remove {path}",
+  REMOVE_WORKTREE_FORCE: "git worktree remove --force {path}",
 } as const
 
 // =============================================================================

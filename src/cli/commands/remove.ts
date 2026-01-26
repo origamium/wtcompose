@@ -90,7 +90,7 @@ async function executeRemoveCommand(branch: string, options: { force?: boolean }
   }
 
   // worktreeを削除
-  removeWorktree(worktreePath)
+  removeWorktree(worktreePath, { force: options.force })
 
   // 成功メッセージ
   console.log("")

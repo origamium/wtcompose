@@ -1,0 +1,22 @@
+# Missing Files WTurbo Configuration
+# Tests handling of missing files and graceful degradation
+
+base_branch: "main"
+docker_compose_file: "./docker-compose.yml"
+
+# Some files exist, some don't
+copy_files:
+  - .env              # exists
+  - .nonexistent      # doesn't exist
+  - missing-dir/      # doesn't exist
+
+# Script that doesn't exist
+start_command: ./nonexistent-start.sh
+end_command: ./nonexistent-stop.sh
+
+env:
+  file:
+    - "./.env"
+    - "./.missing.env"  # doesn't exist
+  adjust:
+    PORT: 1000

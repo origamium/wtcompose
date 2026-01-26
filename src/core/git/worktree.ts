@@ -118,7 +118,7 @@ function parseWorktreeList(output: string): WorktreeInfo[] {
  *
  * @param branchName - 作成するブランチ名
  * @param worktreePath - worktreeを作成するパス
- * @param cwd - 対象ディレクトリ（デフォルト: 現在のディレクトリ）
+ * @param options - オプション（cwd: 作業ディレクトリ, useExistingBranch: 既存ブランチを使用）
  * @throws {Error} 作成に失敗した場合
  *
  * @example
@@ -131,15 +131,23 @@ function parseWorktreeList(output: string): WorktreeInfo[] {
  * }
  * ```
  */
-export function createWorktree(branchName: string, worktreePath: string, cwd?: string): void {
+export function createWorktree(
+  branchName: string,
+  worktreePath: string,
+  options?: { cwd?: string; useExistingBranch?: boolean }
+): void {
+  const cwd = options?.cwd
+  const useExistingBranch = options?.useExistingBranch ?? false
+
   if (!isGitRepository(cwd)) {
     throw new Error("Not in a Git repository")
   }
 
-  const command = GIT_COMMANDS.CREATE_WORKTREE.replace("{path}", worktreePath).replace(
-    "{branch}",
-    branchName
-  )
+  const commandTemplate = useExistingBranch
+    ? GIT_COMMANDS.CREATE_WORKTREE_EXISTING
+    : GIT_COMMANDS.CREATE_WORKTREE
+
+  const command = commandTemplate.replace("{path}", worktreePath).replace("{branch}", branchName)
 
   try {
     execGitCommand(command, { cwd })
@@ -153,7 +161,7 @@ export function createWorktree(branchName: string, worktreePath: string, cwd?: s
  * worktreeを削除
  *
  * @param worktreePath - 削除するworktreeのパス
- * @param cwd - 対象ディレクトリ（デフォルト: 現在のディレクトリ）
+ * @param options - オプション（cwd: 作業ディレクトリ, force: 強制削除）
  * @throws {Error} 削除に失敗した場合
  *
  * @example
@@ -166,12 +174,21 @@ export function createWorktree(branchName: string, worktreePath: string, cwd?: s
  * }
  * ```
  */
-export function removeWorktree(worktreePath: string, cwd?: string): void {
+export function removeWorktree(
+  worktreePath: string,
+  options?: { cwd?: string; force?: boolean }
+): void {
+  const cwd = options?.cwd
+  const force = options?.force ?? false
+
   if (!isGitRepository(cwd)) {
     throw new Error("Not in a Git repository")
   }
 
-  const command = GIT_COMMANDS.REMOVE_WORKTREE.replace("{path}", worktreePath)
+  const commandTemplate = force
+    ? GIT_COMMANDS.REMOVE_WORKTREE_FORCE
+    : GIT_COMMANDS.REMOVE_WORKTREE
+  const command = commandTemplate.replace("{path}", worktreePath)
 
   try {
     execGitCommand(command, { cwd })

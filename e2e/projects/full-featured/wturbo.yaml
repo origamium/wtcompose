@@ -1,0 +1,28 @@
+# Full-Featured WTurbo Configuration
+# All features enabled for comprehensive testing
+
+base_branch: "main"
+docker_compose_file: "./docker-compose.yml"
+
+# Copy all gitignored files
+copy_files:
+  - .env
+  - .env.local
+  - .secrets
+  - config/local.json
+  - scripts/start.sh
+  - scripts/stop.sh
+
+# Lifecycle commands
+start_command: ./scripts/start.sh
+end_command: ./scripts/stop.sh
+
+# Environment configuration
+env:
+  file:
+    - "./.env"
+    - "./.env.local"
+  adjust:
+    APP_PORT: 1000
+    DB_PORT: 1000
+    REDIS_PORT: 1000

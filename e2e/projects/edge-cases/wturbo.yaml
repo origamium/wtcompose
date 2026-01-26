@@ -1,0 +1,22 @@
+# Edge Cases WTurbo Configuration
+# Testing unusual scenarios and edge cases
+
+base_branch: "main"
+docker_compose_file: "./docker-compose.yml"
+
+# Copy files with various naming patterns
+copy_files:
+  - .env
+  - "dir with spaces/config.json"
+  - "deeply/nested/path/to/file.txt"
+  - unicode-日本語.txt
+
+# Simple lifecycle commands
+start_command: ./start.sh
+end_command: ./stop.sh
+
+env:
+  file:
+    - "./.env"
+  adjust:
+    PORT: 100

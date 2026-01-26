@@ -1,0 +1,16 @@
+# Basic WTurbo Configuration
+# Minimal setup for testing core worktree operations
+
+base_branch: "main"
+docker_compose_file: "./docker-compose.yml"
+
+# No copy_files - testing basic operation
+copy_files: []
+
+# No lifecycle commands
+# start_command: not set
+# end_command: not set
+
+env:
+  file: []
+  adjust: {}

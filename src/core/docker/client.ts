@@ -3,13 +3,13 @@
  * Dockerコンテナとボリュームの情報取得を担当
  */
 
-import { execSync } from 'node:child_process'
-import type { ContainerInfo, VolumeInfo, ExecOptions } from '../../types/index.js'
-import { DOCKER_COMMANDS, FILE_ENCODING, WTCOMPOSE_PREFIX } from '../../constants/index.js'
+import { execSync } from "node:child_process"
+import { DOCKER_COMMANDS, FILE_ENCODING, WTCOMPOSE_PREFIX } from "../../constants/index.js"
+import type { ContainerInfo, ExecOptions, VolumeInfo } from "../../types/index.js"
 
 /**
  * Dockerコマンドを実行するための基本ヘルパー
- * 
+ *
  * @param command - 実行するDockerコマンド
  * @param options - 実行オプション
  * @returns コマンドの出力結果
@@ -19,9 +19,9 @@ function execDockerCommand(command: string, options?: ExecOptions): string {
   try {
     const execOptions = {
       encoding: FILE_ENCODING,
-      stdio: 'pipe' as const,
+      stdio: "pipe" as const,
       ...(options?.cwd && { cwd: options.cwd }),
-      ...(options?.env && { env: { ...process.env, ...options.env } })
+      ...(options?.env && { env: { ...process.env, ...options.env } }),
     }
     return execSync(command, execOptions).trim()
   } catch (error: any) {
@@ -31,10 +31,10 @@ function execDockerCommand(command: string, options?: ExecOptions): string {
 
 /**
  * 実行中のDockerコンテナ一覧を取得
- * 
+ *
  * @param options - 実行オプション
  * @returns コンテナ情報の配列
- * 
+ *
  * @example
  * ```typescript
  * const containers = getRunningContainers()
@@ -48,17 +48,17 @@ export function getRunningContainers(options?: ExecOptions): ContainerInfo[] {
     const output = execDockerCommand(DOCKER_COMMANDS.CONTAINERS, options)
     return parseContainerList(output)
   } catch (error) {
-    console.warn('Failed to get running containers:', error)
+    console.warn("Failed to get running containers:", error)
     return []
   }
 }
 
 /**
  * docker psの出力をパースしてコンテナ情報配列に変換
- * 
+ *
  * @param output - docker psの出力
  * @returns パースされたコンテナ情報配列
- * 
+ *
  * @example
  * ```typescript
  * const output = "abc123\tmy-app\tnginx:latest\tUp 5 minutes\t0.0.0.0:3000->80/tcp"
@@ -71,22 +71,25 @@ function parseContainerList(output: string): ContainerInfo[] {
   }
 
   const containers: ContainerInfo[] = []
-  for (const line of output.split('\n')) {
-    const parts = line.split('\t')
+  for (const line of output.split("\n")) {
+    const parts = line.split("\t")
     if (parts.length < 4) {
       continue
     }
 
-    const [id, name, image, status, ports = ''] = parts
+    const [id, name, image, status, ports = ""] = parts
 
     containers.push({
       id: id.trim(),
       name: name.trim(),
       image: image.trim(),
       status: status.trim(),
-      ports: ports.split(',').map(p => p.trim()).filter(p => p.length > 0),
+      ports: ports
+        .split(",")
+        .map((p) => p.trim())
+        .filter((p) => p.length > 0),
       volumes: [] as string[], // 後で個別に取得
-      networks: [] as string[] // 後で個別に取得
+      networks: [] as string[], // 後で個別に取得
     })
   }
   return containers
@@ -94,11 +97,11 @@ function parseContainerList(output: string): ContainerInfo[] {
 
 /**
  * 指定されたコンテナのボリュームマウント情報を取得
- * 
+ *
  * @param containerId - コンテナID
  * @param options - 実行オプション
  * @returns ボリュームマウント情報の配列
- * 
+ *
  * @example
  * ```typescript
  * const volumes = getContainerVolumes('abc123')
@@ -109,11 +112,12 @@ function parseContainerList(output: string): ContainerInfo[] {
  */
 export function getContainerVolumes(containerId: string, options?: ExecOptions): string[] {
   try {
-    const command = DOCKER_COMMANDS.CONTAINER_VOLUMES.replace('{containerId}', containerId)
+    const command = DOCKER_COMMANDS.CONTAINER_VOLUMES.replace("{containerId}", containerId)
     const output = execDockerCommand(command, options)
-    return output.split(',')
-      .map(v => v.trim())
-      .filter(v => v.length > 0 && v !== '<no value>')
+    return output
+      .split(",")
+      .map((v) => v.trim())
+      .filter((v) => v.length > 0 && v !== "<no value>")
   } catch (error) {
     console.warn(`Failed to get volumes for container ${containerId}:`, error)
     return []
@@ -122,11 +126,11 @@ export function getContainerVolumes(containerId: string, options?: ExecOptions):
 
 /**
  * 指定されたコンテナのネットワーク情報を取得
- * 
+ *
  * @param containerId - コンテナID
  * @param options - 実行オプション
  * @returns ネットワーク名の配列
- * 
+ *
  * @example
  * ```typescript
  * const networks = getContainerNetworks('abc123')
@@ -137,11 +141,12 @@ export function getContainerVolumes(containerId: string, options?: ExecOptions):
  */
 export function getContainerNetworks(containerId: string, options?: ExecOptions): string[] {
   try {
-    const command = DOCKER_COMMANDS.CONTAINER_NETWORKS.replace('{containerId}', containerId)
+    const command = DOCKER_COMMANDS.CONTAINER_NETWORKS.replace("{containerId}", containerId)
     const output = execDockerCommand(command, options)
-    return output.split(',')
-      .map(n => n.trim())
-      .filter(n => n.length > 0)
+    return output
+      .split(",")
+      .map((n) => n.trim())
+      .filter((n) => n.length > 0)
   } catch (error) {
     console.warn(`Failed to get networks for container ${containerId}:`, error)
     return []
@@ -150,10 +155,10 @@ export function getContainerNetworks(containerId: string, options?: ExecOptions)
 
 /**
  * Dockerボリューム一覧を取得
- * 
+ *
  * @param options - 実行オプション
  * @returns ボリューム情報の配列
- * 
+ *
  * @example
  * ```typescript
  * const volumes = getDockerVolumes()
@@ -167,14 +172,14 @@ export function getDockerVolumes(options?: ExecOptions): VolumeInfo[] {
     const output = execDockerCommand(DOCKER_COMMANDS.VOLUMES, options)
     return parseVolumeList(output)
   } catch (error) {
-    console.warn('Failed to get Docker volumes:', error)
+    console.warn("Failed to get Docker volumes:", error)
     return []
   }
 }
 
 /**
  * docker volume lsの出力をパースしてボリューム情報配列に変換
- * 
+ *
  * @param output - docker volume lsの出力
  * @returns パースされたボリューム情報配列
  */
@@ -183,28 +188,31 @@ function parseVolumeList(output: string): VolumeInfo[] {
     return []
   }
 
-  return output.split('\n').map(line => {
-    const parts = line.split('\t')
-    if (parts.length < 2) {
-      return null
-    }
+  return output
+    .split("\n")
+    .map((line) => {
+      const parts = line.split("\t")
+      if (parts.length < 2) {
+        return null
+      }
 
-    const [name, driver, mountpoint = ''] = parts
-    
-    return {
-      name: name.trim(),
-      driver: driver.trim(),
-      mountpoint: mountpoint.trim()
-    }
-  }).filter((volume): volume is VolumeInfo => volume !== null)
+      const [name, driver, mountpoint = ""] = parts
+
+      return {
+        name: name.trim(),
+        driver: driver.trim(),
+        mountpoint: mountpoint.trim(),
+      }
+    })
+    .filter((volume): volume is VolumeInfo => volume !== null)
 }
 
 /**
  * 実行中のコンテナから使用されているポート番号を抽出
- * 
+ *
  * @param options - 実行オプション
  * @returns 使用中のポート番号配列
- * 
+ *
  * @example
  * ```typescript
  * const usedPorts = getUsedPorts()
@@ -215,8 +223,8 @@ export function getUsedPorts(options?: ExecOptions): number[] {
   const containers = getRunningContainers(options)
   const ports: number[] = []
 
-  containers.forEach(container => {
-    container.ports.forEach(portMapping => {
+  containers.forEach((container) => {
+    container.ports.forEach((portMapping) => {
       // ポートマッピングの形式: "0.0.0.0:3000->80/tcp" または "3000:80"
       const match = portMapping.match(/(?:[\d.]+:)?(\d+)(?:->\d+(?:\/\w+)?)?/)
       if (match) {
@@ -233,10 +241,10 @@ export function getUsedPorts(options?: ExecOptions): number[] {
 
 /**
  * WTComposeプロジェクトのコンテナかどうかを判定
- * 
+ *
  * @param container - 判定するコンテナ情報
  * @returns WTComposeプロジェクトのコンテナの場合true
- * 
+ *
  * @example
  * ```typescript
  * const containers = getRunningContainers()
@@ -246,16 +254,16 @@ export function getUsedPorts(options?: ExecOptions): number[] {
  */
 export function isWTComposeContainer(container: ContainerInfo): boolean {
   // コンテナ名にwtcomposeが含まれている
-  if (container.name.includes('wtcompose')) {
+  if (container.name.includes("wtcompose")) {
     return true
   }
 
   // 環境変数でWTComposeプロジェクトのコンテナか判定
-  const wtcomposeEnvVars = Object.keys(process.env).filter(key => 
+  const wtcomposeEnvVars = Object.keys(process.env).filter((key) =>
     key.startsWith(WTCOMPOSE_PREFIX)
   )
 
-  return wtcomposeEnvVars.some(envVar => {
+  return wtcomposeEnvVars.some((envVar) => {
     const value = process.env[envVar]
     return value && container.name.includes(value)
   })
@@ -263,10 +271,10 @@ export function isWTComposeContainer(container: ContainerInfo): boolean {
 
 /**
  * Dockerの動作確認とバージョン情報を取得
- * 
+ *
  * @param options - 実行オプション
  * @returns Docker情報オブジェクト
- * 
+ *
  * @example
  * ```typescript
  * try {
@@ -281,8 +289,8 @@ export function isWTComposeContainer(container: ContainerInfo): boolean {
 export function getDockerInfo(options?: ExecOptions) {
   try {
     const dockerVersion = execDockerCommand(DOCKER_COMMANDS.VERSION, options)
-    
-    let composeVersion = 'unknown'
+
+    let composeVersion = "unknown"
     try {
       const composeOutput = execDockerCommand(DOCKER_COMMANDS.COMPOSE_VERSION, options)
       const versionMatch = composeOutput.match(/version (\S+)/)
@@ -296,9 +304,9 @@ export function getDockerInfo(options?: ExecOptions) {
     return {
       dockerVersion,
       composeVersion,
-      isAvailable: true
+      isAvailable: true,
     }
   } catch (error) {
-    throw new Error('Docker is not available or not running')
+    throw new Error("Docker is not available or not running")
   }
 }

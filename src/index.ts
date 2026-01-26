@@ -6,10 +6,10 @@
  */
 
 // 新しいCLIモジュールを使用
-export { main, createMainProgram } from './cli/index.js'
+export { createMainProgram, main } from "./cli/index.js"
 
 // スクリプトとして実行された場合のみmain()を呼び出し
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const { main } = await import('./cli/index.js')
+  const { main } = await import("./cli/index.js")
   main()
 }

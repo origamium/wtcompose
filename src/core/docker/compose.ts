@@ -3,20 +3,20 @@
  * Docker Composeファイルの読み込み、書き込み、ポート調整を担当
  */
 
-import fs from 'fs-extra'
-import { existsSync } from 'node:fs'
-import { parse, stringify } from 'yaml'
-import type { ComposeConfig, FileOperationOptions } from '../../types/index.js'
-import { COMPOSE_FILE_NAMES, PORT_RANGE, FILE_ENCODING } from '../../constants/index.js'
+import { existsSync } from "node:fs"
+import fs from "fs-extra"
+import { parse, stringify } from "yaml"
+import { COMPOSE_FILE_NAMES, FILE_ENCODING, PORT_RANGE } from "../../constants/index.js"
+import type { ComposeConfig, FileOperationOptions } from "../../types/index.js"
 
 /**
  * Docker Composeファイルを読み込んでパース
- * 
+ *
  * @param filePath - Composeファイルのパス
  * @param options - ファイル操作オプション
  * @returns パースされた設定オブジェクト
  * @throws {Error} ファイルの読み込みまたはパースに失敗した場合
- * 
+ *
  * @example
  * ```typescript
  * try {
@@ -34,22 +34,22 @@ export function readComposeFile(filePath: string, options?: FileOperationOptions
     }
 
     const content = fs.readFileSync(filePath, {
-      encoding: options?.encoding || FILE_ENCODING
+      encoding: options?.encoding || FILE_ENCODING,
     })
-    
+
     const parsed = parse(content) as ComposeConfig
-    
-    if (!parsed || typeof parsed !== 'object') {
-      throw new Error('Invalid Docker Compose file format')
+
+    if (!parsed || typeof parsed !== "object") {
+      throw new Error("Invalid Docker Compose file format")
     }
 
-    if (!parsed.services || typeof parsed.services !== 'object') {
-      throw new Error('Docker Compose file must contain a services section')
+    if (!parsed.services || typeof parsed.services !== "object") {
+      throw new Error("Docker Compose file must contain a services section")
     }
 
     return parsed
   } catch (error: any) {
-    if (error.message.includes('not found')) {
+    if (error.message.includes("not found")) {
       throw error
     }
     throw new Error(`Failed to parse Docker Compose file: ${error.message}`)
@@ -58,12 +58,12 @@ export function readComposeFile(filePath: string, options?: FileOperationOptions
 
 /**
  * Docker Compose設定をファイルに書き込み
- * 
+ *
  * @param filePath - 出力先ファイルパス
  * @param config - 書き込む設定オブジェクト
  * @param options - ファイル操作オプション
  * @throws {Error} ファイルの書き込みに失敗した場合
- * 
+ *
  * @example
  * ```typescript
  * const config = {
@@ -76,8 +76,8 @@ export function readComposeFile(filePath: string, options?: FileOperationOptions
  * ```
  */
 export function writeComposeFile(
-  filePath: string, 
-  config: ComposeConfig, 
+  filePath: string,
+  config: ComposeConfig,
   options?: FileOperationOptions
 ): void {
   try {
@@ -91,11 +91,11 @@ export function writeComposeFile(
     const yamlContent = stringify(config, {
       indent: 2,
       lineWidth: 120,
-      minContentWidth: 80
+      minContentWidth: 80,
     })
 
     fs.writeFileSync(filePath, yamlContent, {
-      encoding: options?.encoding || FILE_ENCODING
+      encoding: options?.encoding || FILE_ENCODING,
     })
 
     console.log(`📄 Wrote Docker Compose file: ${filePath}`)
@@ -106,11 +106,11 @@ export function writeComposeFile(
 
 /**
  * Docker Compose設定内で使用中のポートを避けて新しいポートに調整
- * 
+ *
  * @param config - 調整する設定オブジェクト
  * @param usedPorts - 使用中のポート番号配列
  * @returns 調整された設定オブジェクト（元のオブジェクトは変更されない）
- * 
+ *
  * @example
  * ```typescript
  * const config = {
@@ -132,7 +132,7 @@ export function adjustPortsInCompose(config: ComposeConfig, usedPorts: number[])
   Object.entries(newConfig.services).forEach(([serviceName, service]) => {
     if (service.ports && Array.isArray(service.ports)) {
       service.ports = service.ports.map((portMapping: string) => {
-        if (typeof portMapping !== 'string') {
+        if (typeof portMapping !== "string") {
           return portMapping
         }
 
@@ -145,7 +145,7 @@ export function adjustPortsInCompose(config: ComposeConfig, usedPorts: number[])
         const [, hostPortStr, containerPort] = match
         const originalHostPort = parseInt(hostPortStr, 10)
         const newHostPort = findAvailablePort(originalHostPort, currentlyUsed)
-        
+
         // 新しいポートを使用中リストに追加
         currentlyUsed.push(newHostPort)
 
@@ -160,11 +160,11 @@ export function adjustPortsInCompose(config: ComposeConfig, usedPorts: number[])
 
 /**
  * 使用可能なポート番号を検索
- * 
+ *
  * @param basePort - 希望するベースポート番号
  * @param usedPorts - 使用中のポート番号配列
  * @returns 使用可能なポート番号
- * 
+ *
  * @example
  * ```typescript
  * const usedPorts = [3000, 3001, 3002]
@@ -178,9 +178,11 @@ export function findAvailablePort(basePort: number, usedPorts: number[]): number
   const maxAttempts = PORT_RANGE.SEARCH_LIMIT
 
   while (attempts < maxAttempts) {
-    if (!usedPorts.includes(candidatePort) && 
-        candidatePort >= PORT_RANGE.MIN && 
-        candidatePort <= PORT_RANGE.MAX) {
+    if (
+      !usedPorts.includes(candidatePort) &&
+      candidatePort >= PORT_RANGE.MIN &&
+      candidatePort <= PORT_RANGE.MAX
+    ) {
       return candidatePort
     }
     candidatePort++
@@ -188,16 +190,18 @@ export function findAvailablePort(basePort: number, usedPorts: number[]): number
   }
 
   // 上限に達した場合は警告を出して元のポートを返す
-  console.warn(`⚠️  Could not find available port after ${maxAttempts} attempts, using original port ${basePort}`)
+  console.warn(
+    `⚠️  Could not find available port after ${maxAttempts} attempts, using original port ${basePort}`
+  )
   return basePort
 }
 
 /**
  * プロジェクトディレクトリからDocker Composeファイルを自動検出
- * 
+ *
  * @param projectDir - プロジェクトディレクトリパス
  * @returns 見つかったComposeファイルのパス（見つからない場合はnull）
- * 
+ *
  * @example
  * ```typescript
  * const composePath = findComposeFile('/path/to/project')
@@ -221,11 +225,11 @@ export function findComposeFile(projectDir: string): string | null {
 /**
  * Docker Composeプロジェクト名を生成
  * 通常はディレクトリ名にworktreeの識別子を追加
- * 
+ *
  * @param projectDir - プロジェクトディレクトリパス
  * @param branchName - ブランチ名（オプション）
  * @returns プロジェクト名
- * 
+ *
  * @example
  * ```typescript
  * const projectName = generateProjectName('/path/to/my-app', 'feature-branch')
@@ -233,23 +237,23 @@ export function findComposeFile(projectDir: string): string | null {
  * ```
  */
 export function generateProjectName(projectDir: string, branchName?: string): string {
-  const baseName = projectDir.split('/').pop() || 'wtcompose-project'
-  const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
-  
+  const baseName = projectDir.split("/").pop() || "wtcompose-project"
+  const cleanBaseName = baseName.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
+
   if (branchName) {
-    const cleanBranchName = branchName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()
+    const cleanBranchName = branchName.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
     return `${cleanBaseName}-${cleanBranchName}`
   }
-  
+
   return cleanBaseName
 }
 
 /**
  * Docker Compose設定の妥当性をチェック
- * 
+ *
  * @param config - チェックする設定オブジェクト
  * @returns 妥当性チェック結果
- * 
+ *
  * @example
  * ```typescript
  * const result = validateComposeConfig(config)
@@ -270,12 +274,12 @@ export function validateComposeConfig(config: ComposeConfig): {
 
   // バージョンチェック
   if (!config.version) {
-    errors.push('Missing version field')
+    errors.push("Missing version field")
   }
 
   // サービスチェック
   if (!config.services || Object.keys(config.services).length === 0) {
-    errors.push('No services defined')
+    errors.push("No services defined")
   } else {
     Object.entries(config.services).forEach(([serviceName, service]) => {
       if (!service.image && !service.build) {
@@ -284,7 +288,7 @@ export function validateComposeConfig(config: ComposeConfig): {
 
       if (service.ports && Array.isArray(service.ports)) {
         service.ports.forEach((port: any, index: number) => {
-          if (typeof port !== 'string' && typeof port !== 'number') {
+          if (typeof port !== "string" && typeof port !== "number") {
             warnings.push(`Service '${serviceName}' port[${index}] should be a string or number`)
           }
         })
@@ -295,6 +299,6 @@ export function validateComposeConfig(config: ComposeConfig): {
   return {
     isValid: errors.length === 0,
     errors,
-    warnings
+    warnings,
   }
 }

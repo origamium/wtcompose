@@ -3,24 +3,23 @@
  * Git worktreeの作成を担当
  */
 
-import * as path from 'node:path'
-import { existsSync, statSync } from 'node:fs'
-import { execSync } from 'node:child_process'
-import fs from 'fs-extra'
-import { Command } from 'commander'
-import { EXIT_CODES } from '../../constants/index.js'
-
+import { execSync } from "node:child_process"
+import { existsSync, statSync } from "node:fs"
+import * as path from "node:path"
+import { Command } from "commander"
+import fs from "fs-extra"
+import { EXIT_CODES } from "../../constants/index.js"
+import { loadConfig } from "../../core/config/loader.js"
 // Core modules
-import { isGitRepository, getGitRoot, branchExists } from '../../core/git/repository.js'
-import { createWorktree, getWorktreePath, listWorktrees } from '../../core/git/worktree.js'
-import { loadConfig } from '../../core/config/loader.js'
-import type { WTurboConfig } from '../../types/index.js'
+import { branchExists, getGitRoot, isGitRepository } from "../../core/git/repository.js"
+import { createWorktree, getWorktreePath, listWorktrees } from "../../core/git/worktree.js"
+import type { WTurboConfig } from "../../types/index.js"
 
 /**
  * createコマンドを作成
- * 
+ *
  * @returns Commander.js のCommandオブジェクト
- * 
+ *
  * @example
  * ```typescript
  * const program = new Command()
@@ -28,11 +27,11 @@ import type { WTurboConfig } from '../../types/index.js'
  * ```
  */
 export function createCommand(): Command {
-  return new Command('create')
-    .description('Create a new git worktree for the specified branch')
-    .argument('<branch>', 'Branch name to create worktree for')
-    .option('-p, --path <path>', 'Custom path for the worktree')
-    .option('--no-create-branch', 'Use existing branch instead of creating new one')
+  return new Command("create")
+    .description("Create a new git worktree for the specified branch")
+    .argument("<branch>", "Branch name to create worktree for")
+    .option("-p, --path <path>", "Custom path for the worktree")
+    .option("--no-create-branch", "Use existing branch instead of creating new one")
     .action(async (branch: string, options: { path?: string; createBranch?: boolean }) => {
       try {
         await executeCreateCommand(branch, options)
@@ -45,7 +44,7 @@ export function createCommand(): Command {
 
 /**
  * createコマンドのメイン実行ロジック
- * 
+ *
  * @param branch - ブランチ名
  * @param options - コマンドオプション
  * @throws {Error} 実行に失敗した場合
@@ -56,7 +55,7 @@ async function executeCreateCommand(
 ): Promise<void> {
   // Git リポジトリチェック
   if (!isGitRepository()) {
-    console.error('Error: Not in a git repository')
+    console.error("Error: Not in a git repository")
     process.exit(EXIT_CODES.NOT_GIT_REPOSITORY)
   }
 
@@ -70,10 +69,10 @@ async function executeCreateCommand(
   }
 
   // ブランチ名のサニタイズ（パス用）
-  const sanitizedBranch = branch.replace(/\//g, '-')
+  const sanitizedBranch = branch.replace(/\//g, "-")
 
   // worktreeパスの決定
-  const worktreePath = options.path 
+  const worktreePath = options.path
     ? path.resolve(options.path)
     : path.join(path.dirname(gitRoot), `worktree-${sanitizedBranch}`)
 
@@ -94,33 +93,33 @@ async function executeCreateCommand(
   // 設定ファイルを読み込み、copy_filesに指定されたファイル/ディレクトリをコピー
   const config = loadConfig(gitRoot)
   if (config.copy_files && config.copy_files.length > 0) {
-    console.log('')
-    console.log('📋 Copying files/directories...')
+    console.log("")
+    console.log("📋 Copying files/directories...")
     await copyConfiguredFiles(gitRoot, worktreePath, config.copy_files)
   }
 
   // start_commandの実行
   if (config.start_command) {
-    console.log('')
+    console.log("")
     console.log(`🚀 Running start command: ${config.start_command}`)
     await executeStartCommand(config.start_command, worktreePath, gitRoot)
   }
 
   // 成功メッセージ
-  console.log('')
-  console.log('🎉 Worktree created successfully!')
-  console.log('')
-  console.log('Next steps:')
+  console.log("")
+  console.log("🎉 Worktree created successfully!")
+  console.log("")
+  console.log("Next steps:")
   console.log(`  cd ${worktreePath}`)
-  console.log('  # Start working on your branch')
+  console.log("  # Start working on your branch")
 
   // 現在のworktree一覧を表示
-  console.log('')
-  console.log('📋 Current worktrees:')
+  console.log("")
+  console.log("📋 Current worktrees:")
   const worktrees = listWorktrees()
   for (const wt of worktrees) {
     const isNew = wt.branch === branch
-    console.log(`  ${isNew ? '→' : ' '} ${wt.branch}: ${wt.path}`)
+    console.log(`  ${isNew ? "→" : " "} ${wt.branch}: ${wt.path}`)
   }
 }
 
@@ -184,12 +183,12 @@ async function executeStartCommand(
 
     execSync(actualCommand, {
       cwd: worktreePath,
-      stdio: 'inherit',
-      shell: '/bin/sh'
+      stdio: "inherit",
+      shell: "/bin/sh",
     })
-    console.log('  ✅ Start command completed successfully')
+    console.log("  ✅ Start command completed successfully")
   } catch (error: any) {
     console.log(`  ⚠️  Start command failed: ${error.message}`)
-    console.log('  (Worktree was created, but start command had issues)')
+    console.log("  (Worktree was created, but start command had issues)")
   }
 }

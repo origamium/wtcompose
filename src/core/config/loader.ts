@@ -3,12 +3,12 @@
  * WTurbo設定ファイルの検索、読み込み、デフォルト値とのマージを担当
  */
 
-import fs from 'fs-extra'
-import { existsSync } from 'node:fs'
-import * as path from 'node:path'
-import { parse } from 'yaml'
-import type { WTurboConfig } from '../../types/index.js'
-import { CONFIG_FILE_NAMES, DEFAULT_CONFIG } from '../../constants/index.js'
+import { existsSync } from "node:fs"
+import * as path from "node:path"
+import fs from "fs-extra"
+import { parse } from "yaml"
+import { CONFIG_FILE_NAMES, DEFAULT_CONFIG } from "../../constants/index.js"
+import type { WTurboConfig } from "../../types/index.js"
 
 /**
  * 設定ファイルの検索結果
@@ -22,10 +22,10 @@ interface ConfigFileResult {
 
 /**
  * 設定ファイルを検索してパスを返す
- * 
+ *
  * @param startDir - 検索開始ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns 設定ファイルの検索結果
- * 
+ *
  * @example
  * ```typescript
  * const result = findConfigFile('/project/root')
@@ -46,10 +46,10 @@ export function findConfigFile(startDir: string = process.cwd()): ConfigFileResu
 
 /**
  * 設定ファイルのパスを取得（存在しない場合はデフォルトパスを返す）
- * 
+ *
  * @param startDir - 検索開始ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns 設定ファイルのパス
- * 
+ *
  * @example
  * ```typescript
  * const configPath = getConfigFilePath()
@@ -63,10 +63,10 @@ export function getConfigFilePath(startDir: string = process.cwd()): string {
 
 /**
  * 設定ファイルが存在するかチェック
- * 
+ *
  * @param startDir - 検索開始ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns 設定ファイルが存在するか
- * 
+ *
  * @example
  * ```typescript
  * if (hasConfigFile()) {
@@ -82,10 +82,10 @@ export function hasConfigFile(startDir: string = process.cwd()): boolean {
 
 /**
  * 部分設定をデフォルト設定とマージ
- * 
+ *
  * @param partial - 部分設定オブジェクト
  * @returns 完全な設定オブジェクト
- * 
+ *
  * @example
  * ```typescript
  * const config = mergeWithDefaults({
@@ -103,17 +103,17 @@ export function mergeWithDefaults(partial: Partial<WTurboConfig>): WTurboConfig 
     end_command: partial.end_command ?? DEFAULT_CONFIG.end_command,
     env: {
       file: partial.env?.file || [...DEFAULT_CONFIG.env.file],
-      adjust: partial.env?.adjust || { ...DEFAULT_CONFIG.env.adjust }
-    }
+      adjust: partial.env?.adjust || { ...DEFAULT_CONFIG.env.adjust },
+    },
   }
 }
 
 /**
  * デフォルト設定ファイルを作成
- * 
+ *
  * @param configPath - 作成先のパス（デフォルト: カレントディレクトリのwturbo.yaml）
  * @returns 作成された設定オブジェクト
- * 
+ *
  * @example
  * ```typescript
  * const config = createDefaultConfig('./my-project/wturbo.yaml')
@@ -123,7 +123,7 @@ export function mergeWithDefaults(partial: Partial<WTurboConfig>): WTurboConfig 
 export function createDefaultConfig(configPath?: string): WTurboConfig {
   const targetPath = configPath || getConfigFilePath()
   const defaultConfig = mergeWithDefaults({})
-  
+
   const yamlContent = `# WTurbo Configuration File
 # Git worktree management with Docker Compose environment isolation
 
@@ -166,18 +166,18 @@ env:
     # DEBUG_MODE: null      # Remove this variable
 `
 
-  fs.writeFileSync(targetPath, yamlContent, 'utf-8')
+  fs.writeFileSync(targetPath, yamlContent, "utf-8")
   return defaultConfig
 }
 
 /**
  * 設定ファイルを読み込み、パースしてオブジェクトを返す
- * 
+ *
  * @param configDir - 設定ファイル検索ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns 設定オブジェクト
- * 
+ *
  * @throws {Error} 設定ファイルの読み込みまたはパースに失敗した場合
- * 
+ *
  * @example
  * ```typescript
  * try {
@@ -190,28 +190,28 @@ env:
  */
 export function loadConfig(configDir: string = process.cwd()): WTurboConfig {
   const configResult = findConfigFile(configDir)
-  
+
   if (!configResult.exists) {
-    console.log('⚠️  No wturbo.yaml found, using default configuration')
+    console.log("⚠️  No wturbo.yaml found, using default configuration")
     return mergeWithDefaults({})
   }
 
   try {
     console.log(`📋 Loading configuration from: ${path.basename(configResult.path!)}`)
-    const content = fs.readFileSync(configResult.path!, 'utf-8')
+    const content = fs.readFileSync(configResult.path!, "utf-8")
     const parsed = parse(content) as Partial<WTurboConfig>
-    
+
     // 環境ファイルの存在チェック（警告のみ）
     if (parsed.env?.file) {
       const configFileDir = path.dirname(configResult.path!)
-      parsed.env.file.forEach(envFile => {
+      parsed.env.file.forEach((envFile) => {
         const envPath = path.resolve(configFileDir, envFile)
         if (!existsSync(envPath)) {
           console.log(`⚠️  Environment file not found: ${envFile}`)
         }
       })
     }
-    
+
     return mergeWithDefaults(parsed)
   } catch (error: any) {
     throw new Error(`Failed to load configuration from ${configResult.path}: ${error.message}`)

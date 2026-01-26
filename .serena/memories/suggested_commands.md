@@ -1,33 +1,52 @@
-# Suggested Commands for WTCompose Development
+# Suggested Commands for WTurbo Development
 
 ## Development Commands
-- `npm run dev` - Run the CLI in development mode using tsx
-- `npm run build` - Compile TypeScript to JavaScript in dist/
-- `npm start` - Run the compiled CLI from dist/index.js
+```bash
+npm run dev          # 開発モードで実行 (tsx)
+npm run build        # TypeScriptコンパイル
+npm start            # コンパイル済みCLI実行
+```
 
 ## Code Quality Commands
-- `npm run lint` - Lint source code using Biome
-- `npm run format` - Format source code using Biome (with --write)
-- `npm run check` - Run Biome check with --write (combines linting and formatting)
-- `npm run typecheck` - Type check without emitting files
+```bash
+npm run lint         # Biomeでリント
+npm run format       # Biomeでフォーマット
+npm run check        # リント+フォーマット (--write)
+npm run typecheck    # 型チェックのみ
+```
 
-## Testing
-- `npm test` - Currently not implemented (returns error)
+## Testing Commands
+```bash
+npm test             # Vitestでテスト実行（ウォッチモード）
+npm run test:run     # テスト一回実行
+npm run test:ui      # Vitest UI
+```
 
 ## CLI Usage
-- `node dist/index.js` or `wtcompose` (after npm install -g)
-- `wtcompose hello` - Basic hello command
-- `wtcompose hello -n <name>` - Hello command with custom name
-- `wtcompose info` - Show CLI information
+```bash
+# 開発中
+node dist/index.js create feature/xxx
+node dist/index.js remove feature/xxx
+node dist/index.js status
 
-## System Commands (Darwin/macOS)
-- Standard Unix commands: `ls`, `cd`, `grep`, `find`, `git`
-- Package management: `npm`, `brew`
-- Docker commands: `docker`, `docker-compose` or `docker compose`
+# グローバルインストール後
+wturbo create feature/xxx
+wturbo remove feature/xxx
+wturbo status
+```
+
+## Sample Project
+```bash
+cd sample
+../dist/index.js create feature/test    # worktree作成テスト
+../dist/index.js remove feature/test    # worktree削除テスト
+docker compose up -d                    # サービス起動
+docker compose down                     # サービス停止
+```
 
 ## Task Completion Checklist
-When completing a task, run these commands in order:
-1. `npm run typecheck` - Ensure no TypeScript errors
-2. `npm run check` - Format and lint code
-3. `npm run build` - Compile the project
-4. Test the CLI manually if changes affect functionality
+タスク完了時は以下の順序で実行：
+1. `npm run typecheck` - TypeScriptエラーがないことを確認
+2. `npm run check` - フォーマット・リント
+3. `npm run build` - ビルド確認
+4. `npm run test:run` - テスト実行

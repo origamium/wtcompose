@@ -1,6 +1,6 @@
 // Test setup file
-import { beforeEach, afterEach } from 'vitest'
-import { cleanup } from './helpers/git-test-helper'
+import { afterEach, beforeEach } from "vitest"
+import { cleanup } from "./helpers/git-test-helper"
 
 let cleanupTasks: (() => void)[] = []
 

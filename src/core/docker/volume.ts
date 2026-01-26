@@ -4,9 +4,9 @@
  * パフォーマンスを考慮したrsyncベースの実装
  */
 
-import { execSync, spawn } from 'node:child_process'
-import type { ExecOptions } from '../../types/index.js'
-import { FILE_ENCODING } from '../../constants/index.js'
+import { execSync, spawn } from "node:child_process"
+import { FILE_ENCODING } from "../../constants/index.js"
+import type { ExecOptions } from "../../types/index.js"
 
 /**
  * ボリュームコピーの進捗情報
@@ -62,7 +62,7 @@ export interface VolumeDetails {
  */
 function isRsyncAvailable(): boolean {
   try {
-    execSync('docker run --rm alpine which rsync', { stdio: 'pipe' })
+    execSync("docker run --rm alpine which rsync", { stdio: "pipe" })
     return true
   } catch {
     return false
@@ -71,7 +71,7 @@ function isRsyncAvailable(): boolean {
 
 /**
  * ボリュームのサイズを取得
- * 
+ *
  * @param volumeName - ボリューム名
  * @returns サイズ（バイト）
  */
@@ -79,7 +79,7 @@ export function getVolumeSize(volumeName: string): number {
   try {
     const output = execSync(
       `docker run --rm -v ${volumeName}:/data alpine sh -c "du -sb /data 2>/dev/null | cut -f1"`,
-      { encoding: FILE_ENCODING, stdio: 'pipe' }
+      { encoding: FILE_ENCODING, stdio: "pipe" }
     ).trim()
     return parseInt(output, 10) || 0
   } catch {
@@ -89,7 +89,7 @@ export function getVolumeSize(volumeName: string): number {
 
 /**
  * ボリュームの詳細情報を取得
- * 
+ *
  * @param volumeName - ボリューム名
  * @returns ボリューム詳細情報
  */
@@ -97,10 +97,10 @@ export function getVolumeDetails(volumeName: string): VolumeDetails | null {
   try {
     const output = execSync(
       `docker volume inspect ${volumeName} --format '{{.Name}}\t{{.Driver}}\t{{.Mountpoint}}\t{{.CreatedAt}}'`,
-      { encoding: FILE_ENCODING, stdio: 'pipe' }
+      { encoding: FILE_ENCODING, stdio: "pipe" }
     ).trim()
 
-    const [name, driver, mountpoint, createdAt] = output.split('\t')
+    const [name, driver, mountpoint, createdAt] = output.split("\t")
     const size = getVolumeSize(volumeName)
 
     return { name, driver, mountpoint, size, createdAt }
@@ -111,33 +111,33 @@ export function getVolumeDetails(volumeName: string): VolumeDetails | null {
 
 /**
  * ボリュームを作成
- * 
+ *
  * @param volumeName - 作成するボリューム名
  * @param driver - ドライバー（デフォルト: local）
  */
-export function createVolume(volumeName: string, driver: string = 'local'): void {
-  execSync(`docker volume create --driver ${driver} ${volumeName}`, { stdio: 'pipe' })
+export function createVolume(volumeName: string, driver: string = "local"): void {
+  execSync(`docker volume create --driver ${driver} ${volumeName}`, { stdio: "pipe" })
 }
 
 /**
  * ボリュームを削除
- * 
+ *
  * @param volumeName - 削除するボリューム名
  * @param force - 強制削除
  */
 export function removeVolume(volumeName: string, force: boolean = false): void {
-  const forceFlag = force ? ' -f' : ''
-  execSync(`docker volume rm${forceFlag} ${volumeName}`, { stdio: 'pipe' })
+  const forceFlag = force ? " -f" : ""
+  execSync(`docker volume rm${forceFlag} ${volumeName}`, { stdio: "pipe" })
 }
 
 /**
  * rsyncを使用した高速ボリュームコピー
- * 
+ *
  * @param sourceVolume - コピー元ボリューム名
  * @param targetVolume - コピー先ボリューム名
  * @param options - コピーオプション
  * @returns コピー結果のPromise
- * 
+ *
  * @example
  * ```typescript
  * await copyVolumeWithRsync('source-vol', 'target-vol', {
@@ -151,11 +151,7 @@ export async function copyVolumeWithRsync(
   targetVolume: string,
   options: VolumeCopyOptions = {}
 ): Promise<void> {
-  const {
-    onProgress,
-    incremental = true,
-    compress = false
-  } = options
+  const { onProgress, incremental = true, compress = false } = options
 
   // ターゲットボリュームを作成（存在しない場合）
   try {
@@ -169,28 +165,33 @@ export async function copyVolumeWithRsync(
 
   // rsyncオプションを構築
   const rsyncFlags = [
-    '-a',           // アーカイブモード（パーミッション保持）
-    '--info=progress2', // 進捗表示
-    '--no-inc-recursive' // 最初にファイルリストを構築（進捗計算用）
+    "-a", // アーカイブモード（パーミッション保持）
+    "--info=progress2", // 進捗表示
+    "--no-inc-recursive", // 最初にファイルリストを構築（進捗計算用）
   ]
 
   if (incremental) {
-    rsyncFlags.push('--delete') // 差分同期時に不要ファイルを削除
+    rsyncFlags.push("--delete") // 差分同期時に不要ファイルを削除
   }
 
   if (compress) {
-    rsyncFlags.push('-z') // 圧縮
+    rsyncFlags.push("-z") // 圧縮
   }
 
-  const rsyncCommand = `rsync ${rsyncFlags.join(' ')} /source/ /target/`
+  const rsyncCommand = `rsync ${rsyncFlags.join(" ")} /source/ /target/`
 
   return new Promise((resolve, reject) => {
-    const dockerProcess = spawn('docker', [
-      'run', '--rm',
-      '-v', `${sourceVolume}:/source:ro`,
-      '-v', `${targetVolume}:/target`,
-      'instrumentisto/rsync-ssh',
-      'sh', '-c', rsyncCommand
+    const dockerProcess = spawn("docker", [
+      "run",
+      "--rm",
+      "-v",
+      `${sourceVolume}:/source:ro`,
+      "-v",
+      `${targetVolume}:/target`,
+      "instrumentisto/rsync-ssh",
+      "sh",
+      "-c",
+      rsyncCommand,
     ])
 
     let lastProgress: VolumeCopyProgress = {
@@ -200,20 +201,18 @@ export async function copyVolumeWithRsync(
       bytesTransferred: 0,
       totalBytes,
       speed: 0,
-      eta: 0
+      eta: 0,
     }
 
-    dockerProcess.stdout.on('data', (data: Buffer) => {
+    dockerProcess.stdout.on("data", (data: Buffer) => {
       const output = data.toString()
-      
+
       // rsync --info=progress2 の出力をパース
       // 例: "1,234,567  45%   12.34MB/s    0:01:23"
-      const progressMatch = output.match(
-        /(\d[\d,]*)\s+(\d+)%\s+([\d.]+\w+\/s)\s+(\d+:\d+:\d+)/
-      )
+      const progressMatch = output.match(/(\d[\d,]*)\s+(\d+)%\s+([\d.]+\w+\/s)\s+(\d+:\d+:\d+)/)
 
       if (progressMatch && onProgress) {
-        const bytesTransferred = parseInt(progressMatch[1].replace(/,/g, ''), 10)
+        const bytesTransferred = parseInt(progressMatch[1].replace(/,/g, ""), 10)
         const percentage = parseInt(progressMatch[2], 10)
         const speedStr = progressMatch[3]
         const etaStr = progressMatch[4]
@@ -225,16 +224,16 @@ export async function copyVolumeWithRsync(
           const value = parseFloat(speedMatch[1])
           const unit = speedMatch[2].toLowerCase()
           const multipliers: Record<string, number> = {
-            'b/s': 1,
-            'kb/s': 1024,
-            'mb/s': 1024 * 1024,
-            'gb/s': 1024 * 1024 * 1024
+            "b/s": 1,
+            "kb/s": 1024,
+            "mb/s": 1024 * 1024,
+            "gb/s": 1024 * 1024 * 1024,
           }
           speed = value * (multipliers[unit] || 1)
         }
 
         // ETAをパース (例: "0:01:23" -> 秒)
-        const etaParts = etaStr.split(':').map(Number)
+        const etaParts = etaStr.split(":").map(Number)
         const eta = etaParts[0] * 3600 + etaParts[1] * 60 + etaParts[2]
 
         lastProgress = {
@@ -244,29 +243,29 @@ export async function copyVolumeWithRsync(
           bytesTransferred,
           totalBytes,
           speed,
-          eta
+          eta,
         }
 
         onProgress(lastProgress)
       }
     })
 
-    dockerProcess.stderr.on('data', (data: Buffer) => {
+    dockerProcess.stderr.on("data", (data: Buffer) => {
       // rsyncのエラー出力を処理
       const error = data.toString()
-      if (error.includes('error') || error.includes('failed')) {
-        console.error('rsync error:', error)
+      if (error.includes("error") || error.includes("failed")) {
+        console.error("rsync error:", error)
       }
     })
 
-    dockerProcess.on('close', (code) => {
+    dockerProcess.on("close", (code) => {
       if (code === 0) {
         // 完了時に100%を通知
         if (onProgress) {
           onProgress({
             ...lastProgress,
             percentage: 100,
-            bytesTransferred: totalBytes
+            bytesTransferred: totalBytes,
           })
         }
         resolve()
@@ -275,7 +274,7 @@ export async function copyVolumeWithRsync(
       }
     })
 
-    dockerProcess.on('error', (error) => {
+    dockerProcess.on("error", (error) => {
       reject(error)
     })
   })
@@ -283,7 +282,7 @@ export async function copyVolumeWithRsync(
 
 /**
  * 従来のcpコマンドを使用したボリュームコピー（フォールバック用）
- * 
+ *
  * @param sourceVolume - コピー元ボリューム名
  * @param targetVolume - コピー先ボリューム名
  * @param onProgress - 進捗コールバック（開始/終了のみ）
@@ -311,14 +310,14 @@ export async function copyVolumeWithCp(
       bytesTransferred: 0,
       totalBytes,
       speed: 0,
-      eta: 0
+      eta: 0,
     })
   }
 
   // cpコマンドでコピー
   execSync(
     `docker run --rm -v ${sourceVolume}:/source:ro -v ${targetVolume}:/target alpine sh -c "cp -a /source/. /target/"`,
-    { stdio: 'pipe' }
+    { stdio: "pipe" }
   )
 
   // 完了通知
@@ -330,7 +329,7 @@ export async function copyVolumeWithCp(
       bytesTransferred: totalBytes,
       totalBytes,
       speed: 0,
-      eta: 0
+      eta: 0,
     })
   }
 }
@@ -338,12 +337,12 @@ export async function copyVolumeWithCp(
 /**
  * 最適な方法でボリュームをコピー
  * rsyncが利用可能な場合はrsyncを使用、そうでなければcpを使用
- * 
+ *
  * @param sourceVolume - コピー元ボリューム名
  * @param targetVolume - コピー先ボリューム名
  * @param options - コピーオプション
  * @returns コピー結果のPromise
- * 
+ *
  * @example
  * ```typescript
  * // プログレスバー付きでコピー
@@ -363,18 +362,18 @@ export async function copyVolume(
   try {
     await copyVolumeWithRsync(sourceVolume, targetVolume, options)
   } catch (error) {
-    console.warn('rsync copy failed, falling back to cp:', error)
+    console.warn("rsync copy failed, falling back to cp:", error)
     await copyVolumeWithCp(sourceVolume, targetVolume, options.onProgress)
   }
 }
 
 /**
  * 複数のボリュームを並列でコピー
- * 
+ *
  * @param volumePairs - コピーするボリュームのペア配列
  * @param options - コピーオプション
  * @returns コピー結果のPromise
- * 
+ *
  * @example
  * ```typescript
  * await copyVolumesParallel([
@@ -392,47 +391,45 @@ export async function copyVolumesParallel(
   options: VolumeCopyOptions = {}
 ): Promise<void> {
   const { parallelWorkers = 2, ...copyOptions } = options
-  
+
   // バッチに分割して並列実行
   for (let i = 0; i < volumePairs.length; i += parallelWorkers) {
     const batch = volumePairs.slice(i, i + parallelWorkers)
-    await Promise.all(
-      batch.map(pair => copyVolume(pair.source, pair.target, copyOptions))
-    )
+    await Promise.all(batch.map((pair) => copyVolume(pair.source, pair.target, copyOptions)))
   }
 }
 
 /**
  * バイト数を人間が読みやすい形式にフォーマット
- * 
+ *
  * @param bytes - バイト数
  * @returns フォーマットされた文字列
  */
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 B'
-  
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
+  if (bytes === 0) return "0 B"
+
+  const units = ["B", "KB", "MB", "GB", "TB"]
   const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  const value = bytes / Math.pow(1024, i)
-  
+  const value = bytes / 1024 ** i
+
   return `${value.toFixed(2)} ${units[i]}`
 }
 
 /**
  * 秒数を人間が読みやすい形式にフォーマット
- * 
+ *
  * @param seconds - 秒数
  * @returns フォーマットされた文字列
  */
 export function formatEta(seconds: number): string {
-  if (seconds <= 0) return '--:--'
-  
+  if (seconds <= 0) return "--:--"
+
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const secs = Math.floor(seconds % 60)
-  
+
   if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`
   }
-  return `${minutes}:${String(secs).padStart(2, '0')}`
+  return `${minutes}:${String(secs).padStart(2, "0")}`
 }

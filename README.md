@@ -7,7 +7,8 @@ WTurboは、Git worktreeとDocker Composeを使用して開発環境を効率的
 WTurboを使用することで、以下のことが可能になります：
 
 - Git worktreeを使用したブランチ単位の独立した開発環境の作成
-- Docker Composeサービスの自動起動と管理
+- gitignoreされたファイル（.env等）のworktreeへの自動コピー
+- worktree作成後/削除前のスクリプト自動実行
 - 環境変数の自動調整（ポート番号の重複回避など）
 - 開発環境のステータス確認と管理
 
@@ -28,14 +29,18 @@ base_branch: main
 # Docker Composeファイルのパス
 docker_compose_file: ./docker-compose.yml
 
-start_command: ./start-dev.sh
-end_command: ./stop-dev.sh
-
 # コピーするファイル、ディレクトリの指定
+# gitignoreされているファイルもworktreeにコピーされます
 copy_files:
   - .env
   - .claude
   - .serena
+
+# worktree作成後に実行するコマンド
+start_command: ./start-dev.sh
+
+# worktree削除時に実行するコマンド
+end_command: ./stop-dev.sh
 
 # 環境変数の設定
 env:
@@ -45,13 +50,46 @@ env:
     - .env.local
 
   # 環境変数の調整設定
+  # 数値: ポート番号にその値を加算
+  # 文字列: その値で置換
+  # null: 変数を削除
   adjust:
-    PORT: 3000
-    DATABASE_PORT: 5432
-    REDIS_PORT: 6379
+    APP_PORT: 1000
+    DB_PORT: 1000
 ```
 
 ## コマンド
+
+### `wturbo create <branch>`
+
+新しいworktreeを作成します：
+
+```bash
+wturbo create feature/new-feature
+```
+
+処理フロー：
+1. Git worktreeを作成
+2. `copy_files`で指定されたファイル/ディレクトリをコピー
+3. `start_command`を実行（設定されている場合）
+
+オプション：
+- `-p, --path <path>` - worktreeのカスタムパスを指定
+
+### `wturbo remove <branch>`
+
+worktreeを削除します：
+
+```bash
+wturbo remove feature/new-feature
+```
+
+処理フロー：
+1. `end_command`を実行（設定されている場合）
+2. Git worktreeを削除
+
+オプション：
+- `-f, --force` - 未コミットの変更があっても強制削除
 
 ### `wturbo status`
 
@@ -81,6 +119,18 @@ wturbo status
 └─────────────────────────────┴─────────────┴──────────────────┘
 ```
 
+## 設定項目
+
+| 項目 | 型 | 必須 | 説明 |
+|------|------|------|------|
+| `base_branch` | string | ○ | ベースブランチ名 |
+| `docker_compose_file` | string | ○ | Docker Composeファイルのパス |
+| `copy_files` | string[] | - | コピーするファイル/ディレクトリ |
+| `start_command` | string | - | worktree作成後に実行するコマンド |
+| `end_command` | string | - | worktree削除時に実行するコマンド |
+| `env.file` | string[] | - | 環境変数ファイルのリスト |
+| `env.adjust` | object | - | 環境変数の調整設定 |
+
 ## プロジェクト構造
 
 ```
@@ -89,18 +139,18 @@ src/
 │   └── index.ts
 ├── constants/       # 定数定義
 │   └── index.ts
-├── core/           # コアビジネスロジック
-│   ├── config/     # 設定管理
-│   ├── git/        # Git操作
-│   ├── docker/     # Docker操作
+├── core/            # コアビジネスロジック
+│   ├── config/      # 設定管理
+│   ├── git/         # Git操作
+│   ├── docker/      # Docker操作
 │   └── environment/ # 環境変数処理
-├── cli/            # CLIインターフェース
-│   ├── commands/   # コマンド実装
-│   └── index.ts    # CLIエントリーポイント
-├── utils/          # ユーティリティ
-│   ├── system.ts
-│   └── file.ts
-└── index.ts        # メインエントリーポイント
+├── cli/             # CLIインターフェース
+│   ├── commands/    # コマンド実装
+│   │   ├── create.ts
+│   │   ├── remove.ts
+│   │   └── status.ts
+│   └── index.ts     # CLIエントリーポイント
+└── index.ts         # メインエントリーポイント
 ```
 
 ## 開発
@@ -123,47 +173,22 @@ npm run build
 # テスト実行
 npm test
 
-# テスト実行（ウォッチモード）
-npm run test:watch
-
 # 型チェック
 npm run typecheck
 
-# リント
-npm run lint
+# リント・フォーマット
+npm run check
 ```
 
-### テスト
-
-プロジェクトではVitestを使用してテストを実行しています：
+### サンプルプロジェクトでテスト
 
 ```bash
-# 全テスト実行
-npm test
-
-# 特定のテストファイル実行
-npm test src/core/config/loader.test.ts
-
-# カバレッジ付きテスト実行
-npm run test:coverage
+cd sample
+../dist/index.js create feature/test
+../dist/index.js status
+../dist/index.js remove feature/test
 ```
-
-## アーキテクチャ
-
-詳細なアーキテクチャ情報については [ARCHITECTURE.md](./ARCHITECTURE.md) を参照してください。
 
 ## ライセンス
 
 MIT License
-
-## 貢献
-
-1. このリポジトリをフォーク
-2. フィーチャーブランチを作成 (`git checkout -b feature/amazing-feature`)
-3. 変更をコミット (`git commit -m 'Add some amazing feature'`)
-4. ブランチにプッシュ (`git push origin feature/amazing-feature`)
-5. プルリクエストを作成
-
-## サポート
-
-問題や質問がある場合は、GitHubのIssuesページで報告してください。

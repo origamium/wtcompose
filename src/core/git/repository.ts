@@ -3,18 +3,18 @@
  * Gitリポジトリの基本的な状態確認と情報取得を担当
  */
 
-import { execSync } from 'node:child_process'
-import type { ExecOptions } from '../../types/index.js'
-import { GIT_COMMANDS, EXIT_CODES, FILE_ENCODING } from '../../constants/index.js'
+import { execSync } from "node:child_process"
+import { EXIT_CODES, FILE_ENCODING, GIT_COMMANDS } from "../../constants/index.js"
+import type { ExecOptions } from "../../types/index.js"
 
 /**
  * Gitコマンドを実行するための基本ヘルパー
- * 
+ *
  * @param command - 実行するGitコマンド
  * @param options - 実行オプション
  * @returns コマンドの出力結果
  * @throws {Error} コマンドの実行に失敗した場合
- * 
+ *
  * @example
  * ```typescript
  * const output = execGitCommand('git status --porcelain')
@@ -25,9 +25,9 @@ function execGitCommand(command: string, options?: ExecOptions): string {
   try {
     const execOptions = {
       encoding: FILE_ENCODING,
-      stdio: 'pipe' as const,
+      stdio: "pipe" as const,
       ...(options?.cwd && { cwd: options.cwd }),
-      ...(options?.env && { env: { ...process.env, ...options.env } })
+      ...(options?.env && { env: { ...process.env, ...options.env } }),
     }
     return execSync(command, execOptions).trim()
   } catch (error: any) {
@@ -37,10 +37,10 @@ function execGitCommand(command: string, options?: ExecOptions): string {
 
 /**
  * 現在のディレクトリがGitリポジトリかどうかを判定
- * 
+ *
  * @param cwd - チェックするディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns Gitリポジトリの場合true
- * 
+ *
  * @example
  * ```typescript
  * if (isGitRepository()) {
@@ -62,11 +62,11 @@ export function isGitRepository(cwd?: string): boolean {
 
 /**
  * Gitリポジトリのルートディレクトリを取得
- * 
+ *
  * @param cwd - 開始ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns リポジトリのルートディレクトリパス
  * @throws {Error} Gitリポジトリではない場合
- * 
+ *
  * @example
  * ```typescript
  * try {
@@ -79,18 +79,18 @@ export function isGitRepository(cwd?: string): boolean {
  */
 export function getGitRoot(cwd?: string): string {
   if (!isGitRepository(cwd)) {
-    throw new Error('Not in a Git repository')
+    throw new Error("Not in a Git repository")
   }
   return execGitCommand(GIT_COMMANDS.GET_ROOT, { cwd })
 }
 
 /**
  * 現在のブランチ名を取得
- * 
+ *
  * @param cwd - 対象ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns 現在のブランチ名
  * @throws {Error} Gitリポジトリではない場合
- * 
+ *
  * @example
  * ```typescript
  * const branch = getCurrentBranch()
@@ -99,18 +99,18 @@ export function getGitRoot(cwd?: string): string {
  */
 export function getCurrentBranch(cwd?: string): string {
   if (!isGitRepository(cwd)) {
-    throw new Error('Not in a Git repository')
+    throw new Error("Not in a Git repository")
   }
   return execGitCommand(GIT_COMMANDS.CURRENT_BRANCH, { cwd })
 }
 
 /**
  * 指定したブランチが存在するかチェック
- * 
+ *
  * @param branchName - チェックするブランチ名
  * @param cwd - 対象ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns ブランチが存在する場合true
- * 
+ *
  * @example
  * ```typescript
  * if (branchExists('feature/new-ui')) {
@@ -124,9 +124,9 @@ export function branchExists(branchName: string, cwd?: string): boolean {
   if (!isGitRepository(cwd)) {
     return false
   }
-  
+
   try {
-    const command = GIT_COMMANDS.BRANCH_EXISTS.replace('{branchName}', branchName)
+    const command = GIT_COMMANDS.BRANCH_EXISTS.replace("{branchName}", branchName)
     execGitCommand(command, { cwd })
     return true
   } catch {
@@ -136,11 +136,11 @@ export function branchExists(branchName: string, cwd?: string): boolean {
 
 /**
  * リポジトリの基本情報を取得
- * 
+ *
  * @param cwd - 対象ディレクトリ（デフォルト: 現在のディレクトリ）
  * @returns リポジトリ情報オブジェクト
  * @throws {Error} Gitリポジトリではない場合
- * 
+ *
  * @example
  * ```typescript
  * const info = getRepositoryInfo()
@@ -151,16 +151,16 @@ export function branchExists(branchName: string, cwd?: string): boolean {
  */
 export function getRepositoryInfo(cwd?: string) {
   if (!isGitRepository(cwd)) {
-    throw new Error('Not in a Git repository')
+    throw new Error("Not in a Git repository")
   }
 
   const root = getGitRoot(cwd)
   const currentBranch = getCurrentBranch(cwd)
-  
+
   // リポジトリの状態をチェック
   let isClean: boolean
   try {
-    const status = execGitCommand('git status --porcelain', { cwd })
+    const status = execGitCommand("git status --porcelain", { cwd })
     isClean = status.length === 0
   } catch {
     isClean = false
@@ -170,6 +170,6 @@ export function getRepositoryInfo(cwd?: string) {
     root,
     currentBranch,
     isClean,
-    isGitRepository: true
+    isGitRepository: true,
   }
 }

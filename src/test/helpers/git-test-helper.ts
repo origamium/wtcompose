@@ -1,5 +1,4 @@
 import { execSync } from "node:child_process"
-import * as os from "node:os"
 import * as path from "node:path"
 import * as fs from "fs-extra"
 
@@ -218,7 +217,7 @@ export function cleanup(): void {
 /**
  * Create a wturbo.yaml config file in the test repository
  */
-export function createWTurboConfig(repoPath: string, config?: any): void {
+export function createWTurboConfig(repoPath: string, config?: Record<string, unknown>): void {
   const defaultConfig = {
     base_branch: "main",
     docker_compose_file: "./docker-compose.yaml",

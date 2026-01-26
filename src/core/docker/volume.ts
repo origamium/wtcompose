@@ -6,7 +6,6 @@
 
 import { execSync, spawn } from "node:child_process"
 import { FILE_ENCODING } from "../../constants/index.js"
-import type { ExecOptions } from "../../types/index.js"
 
 /**
  * ボリュームコピーの進捗情報
@@ -57,17 +56,16 @@ export interface VolumeDetails {
   createdAt: string
 }
 
-/**
- * rsyncが利用可能かチェック
- */
-function isRsyncAvailable(): boolean {
-  try {
-    execSync("docker run --rm alpine which rsync", { stdio: "pipe" })
-    return true
-  } catch {
-    return false
-  }
-}
+// Note: isRsyncAvailable is not currently used but kept for future optimization
+// when we want to dynamically choose between rsync and cp based on availability
+// function isRsyncAvailable(): boolean {
+//   try {
+//     execSync("docker run --rm alpine which rsync", { stdio: "pipe" })
+//     return true
+//   } catch {
+//     return false
+//   }
+// }
 
 /**
  * ボリュームのサイズを取得

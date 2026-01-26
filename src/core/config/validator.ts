@@ -5,7 +5,6 @@
 
 import { existsSync } from "node:fs"
 import * as path from "node:path"
-import fs from "fs-extra"
 import { ENV_VAR_PATTERNS } from "../../constants/index.js"
 import type { WTurboConfig } from "../../types/index.js"
 

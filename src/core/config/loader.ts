@@ -197,13 +197,14 @@ export function loadConfig(configDir: string = process.cwd()): WTurboConfig {
   }
 
   try {
-    console.log(`📋 Loading configuration from: ${path.basename(configResult.path!)}`)
-    const content = fs.readFileSync(configResult.path!, "utf-8")
+    const configPath = configResult.path as string
+    console.log(`📋 Loading configuration from: ${path.basename(configPath)}`)
+    const content = fs.readFileSync(configPath, "utf-8")
     const parsed = parse(content) as Partial<WTurboConfig>
 
     // 環境ファイルの存在チェック（警告のみ）
     if (parsed.env?.file) {
-      const configFileDir = path.dirname(configResult.path!)
+      const configFileDir = path.dirname(configPath)
       parsed.env.file.forEach((envFile) => {
         const envPath = path.resolve(configFileDir, envFile)
         if (!existsSync(envPath)) {
@@ -213,7 +214,8 @@ export function loadConfig(configDir: string = process.cwd()): WTurboConfig {
     }
 
     return mergeWithDefaults(parsed)
-  } catch (error: any) {
-    throw new Error(`Failed to load configuration from ${configResult.path}: ${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to load configuration from ${configResult.path}: ${message}`)
   }
 }

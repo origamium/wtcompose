@@ -58,7 +58,7 @@ export function formatVolumeCopyProgress(
   const bar = createProgressBar(progress.percentage, options)
   const transferred = formatBytes(progress.bytesTransferred)
   const total = formatBytes(progress.totalBytes)
-  const speed = formatBytes(progress.speed) + "/s"
+  const speed = `${formatBytes(progress.speed)}/s`
   const eta = formatEta(progress.eta)
 
   return `${bar} | ${transferred}/${total} | ${speed} | ETA: ${eta}`
@@ -155,7 +155,9 @@ export class MultiVolumeProgressTracker {
       `${clearLine}📦 Volume Copy Progress: ${overallBar} | Elapsed: ${formatEta(elapsed)}`
     )
     console.log(`${clearLine}`)
-    lines.forEach((line) => console.log(`${clearLine}${line}`))
+    for (const line of lines) {
+      console.log(`${clearLine}${line}`)
+    }
   }
 
   /**

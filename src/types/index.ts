@@ -105,7 +105,8 @@ export interface ComposeService {
   networks?: string[]
   /** 依存関係 */
   depends_on?: string[]
-  /** その他の設定 */
+  /** その他の設定（Docker Composeは任意のキーを許容） */
+  // biome-ignore lint/suspicious/noExplicitAny: Docker Compose allows arbitrary keys
   [key: string]: any
 }
 
@@ -117,11 +118,14 @@ export interface ComposeConfig {
   version: string
   /** サービス定義 */
   services: Record<string, ComposeService>
-  /** ボリューム定義 */
+  /** ボリューム定義（Docker Composeは任意の構造を許容） */
+  // biome-ignore lint/suspicious/noExplicitAny: Docker Compose volumes have flexible structure
   volumes?: Record<string, any>
-  /** ネットワーク定義 */
+  /** ネットワーク定義（Docker Composeは任意の構造を許容） */
+  // biome-ignore lint/suspicious/noExplicitAny: Docker Compose networks have flexible structure
   networks?: Record<string, any>
-  /** その他の設定 */
+  /** その他の設定（Docker Composeは任意のキーを許容） */
+  // biome-ignore lint/suspicious/noExplicitAny: Docker Compose allows arbitrary keys
   [key: string]: any
 }
 
@@ -192,5 +196,5 @@ export interface WTurboError extends Error {
   /** エラーコード */
   code: string
   /** 詳細情報 */
-  details?: Record<string, any>
+  details?: Record<string, unknown>
 }

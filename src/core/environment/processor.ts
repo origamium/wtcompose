@@ -66,11 +66,12 @@ export function parseEnvFile(filePath: string, options?: FileOperationOptions): 
     })
 
     return parseEnvContent(content)
-  } catch (error: any) {
-    if (error.message.includes("not found")) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("not found")) {
       throw error
     }
-    throw new Error(`Failed to read environment file: ${error.message}`)
+    throw new Error(`Failed to read environment file: ${message}`)
   }
 }
 
@@ -92,7 +93,7 @@ export function parseEnvContent(content: string): ParsedEnvFile {
   const entries: EnvEntry[] = []
   const otherLines: string[] = []
 
-  lines.forEach((line, index) => {
+  lines.forEach((line) => {
     const trimmedLine = line.trim()
 
     // 空行またはコメント行
@@ -231,8 +232,9 @@ export function writeEnvFile(
     })
 
     console.log(`🔧 Wrote environment file: ${filePath}`)
-  } catch (error: any) {
-    throw new Error(`Failed to write environment file: ${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to write environment file: ${message}`)
   }
 }
 
@@ -280,7 +282,7 @@ export function copyAndAdjustEnvFile(
     } else if (typeof adjustment === "number") {
       // 数値の場合は元の値に加算（ポート番号等）
       const originalValue = parseInt(entry.value, 10)
-      if (!isNaN(originalValue)) {
+      if (!Number.isNaN(originalValue)) {
         entry.value = (originalValue + adjustment).toString()
         adjustedCount++
       }

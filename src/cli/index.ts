@@ -7,9 +7,19 @@
 
 import { Command } from "commander"
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION, EXIT_CODES } from "../constants/index.js"
+import { getErrorMessage } from "../utils/error.js"
 import { createCommand } from "./commands/create.js"
 import { removeCommand } from "./commands/remove.js"
 import { statusCommand } from "./commands/status.js"
+
+/**
+ * メインコマンドのオプション型
+ */
+interface MainCommandOptions {
+  branch?: string
+  build?: boolean
+  remove?: boolean
+}
 
 /**
  * メインCLIプログラムを作成・設定
@@ -40,8 +50,8 @@ function createMainProgram(): Command {
 
       try {
         await executeMainCommand(options)
-      } catch (error: any) {
-        console.error(`Error: ${error.message}`)
+      } catch (error) {
+        console.error(`Error: ${getErrorMessage(error)}`)
         process.exit(EXIT_CODES.GENERAL_ERROR)
       }
     })
@@ -68,7 +78,7 @@ function createMainProgram(): Command {
  * await executeMainCommand({ branch: 'feature/new-ui', build: true })
  * ```
  */
-async function executeMainCommand(options: any): Promise<void> {
+async function executeMainCommand(options: MainCommandOptions): Promise<void> {
   const { branch, build, remove } = options
 
   if (remove) {

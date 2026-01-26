@@ -13,7 +13,7 @@ import { loadConfig } from "../../core/config/loader.js"
 // Core modules
 import { branchExists, getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { createWorktree, getWorktreePath, listWorktrees } from "../../core/git/worktree.js"
-import type { WTurboConfig } from "../../types/index.js"
+import { getErrorMessage } from "../../utils/error.js"
 
 /**
  * createコマンドを作成
@@ -35,8 +35,8 @@ export function createCommand(): Command {
     .action(async (branch: string, options: { path?: string; createBranch?: boolean }) => {
       try {
         await executeCreateCommand(branch, options)
-      } catch (error: any) {
-        console.error(`Error: ${error.message}`)
+      } catch (error) {
+        console.error(`Error: ${getErrorMessage(error)}`)
         process.exit(EXIT_CODES.GENERAL_ERROR)
       }
     })
@@ -102,7 +102,7 @@ async function executeCreateCommand(
   if (config.start_command) {
     console.log("")
     console.log(`🚀 Running start command: ${config.start_command}`)
-    await executeStartCommand(config.start_command, worktreePath, gitRoot)
+    await executeStartCommand(config.start_command, worktreePath)
   }
 
   // 成功メッセージ
@@ -158,8 +158,8 @@ async function copyConfiguredFiles(
         await fs.copy(sourcePath, targetPath, { overwrite: true })
         console.log(`  ✅ Copied file: ${relativePath}`)
       }
-    } catch (error: any) {
-      console.log(`  ❌ Failed to copy ${relativePath}: ${error.message}`)
+    } catch (error) {
+      console.log(`  ❌ Failed to copy ${relativePath}: ${getErrorMessage(error)}`)
     }
   }
 }
@@ -169,13 +169,8 @@ async function copyConfiguredFiles(
  *
  * @param command - 実行するコマンド（スクリプトパス）
  * @param worktreePath - worktreeのパス（作業ディレクトリ）
- * @param gitRoot - gitルートディレクトリ（コマンドの相対パス解決用）
  */
-async function executeStartCommand(
-  command: string,
-  worktreePath: string,
-  gitRoot: string
-): Promise<void> {
+async function executeStartCommand(command: string, worktreePath: string): Promise<void> {
   try {
     // コマンドがスクリプトファイルの場合、worktree内のパスを使用
     const commandPath = path.resolve(worktreePath, command)
@@ -187,8 +182,8 @@ async function executeStartCommand(
       shell: "/bin/sh",
     })
     console.log("  ✅ Start command completed successfully")
-  } catch (error: any) {
-    console.log(`  ⚠️  Start command failed: ${error.message}`)
+  } catch (error) {
+    console.log(`  ⚠️  Start command failed: ${getErrorMessage(error)}`)
     console.log("  (Worktree was created, but start command had issues)")
   }
 }

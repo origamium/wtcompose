@@ -4,23 +4,21 @@
  */
 
 import * as path from "node:path"
-import { existsSync, readFileSync, writeFileSync } from "fs-extra"
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { existsSync } from "node:fs"
+import fs from "fs-extra"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { parse } from "yaml"
-import { createTestGitRepo, type TestGitRepo } from "../../test/helpers/git-test-helper.js"
-import type { WTurboConfig } from "../../types/index.js"
-import {
-  createDefaultConfig,
-  findConfigFile,
-  getConfigFilePath,
-  hasConfigFile,
-  loadConfig,
-  mergeWithDefaults,
-} from "./loader.js"
+import { createDefaultConfig, findConfigFile, loadConfig } from "./loader.js"
 
 // Mock dependencies
-vi.mock("fs-extra", () => ({
+vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
+}))
+vi.mock("fs-extra", () => ({
+  default: {
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+  },
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
 }))
@@ -29,22 +27,17 @@ vi.mock("yaml", () => ({
 }))
 
 describe("Config Loader (Refactored)", () => {
-  let testRepo: TestGitRepo
+  const testRepoPath = "/tmp/test-repo"
 
   beforeEach(() => {
     vi.clearAllMocks()
-    testRepo = createTestGitRepo()
-  })
-
-  afterEach(() => {
-    testRepo?.cleanup()
   })
 
   describe("loadConfig", () => {
     it("should load default config when no wturbo.yaml exists", () => {
       vi.mocked(existsSync).mockReturnValue(false)
 
-      const config = loadConfig(testRepo.path)
+      const config = loadConfig(testRepoPath)
 
       expect(config.base_branch).toBe("main")
       expect(config.docker_compose_file).toBe("./docker-compose.yml")
@@ -62,7 +55,7 @@ env:
     APP_PORT: 1000
 `
       vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readFileSync).mockReturnValue(mockContent)
+      vi.mocked(fs.readFileSync).mockReturnValue(mockContent)
       vi.mocked(parse).mockReturnValue({
         base_branch: "develop",
         docker_compose_file: "./docker-compose.dev.yml",
@@ -72,7 +65,7 @@ env:
         },
       })
 
-      const config = loadConfig(testRepo.path)
+      const config = loadConfig(testRepoPath)
 
       expect(config.base_branch).toBe("develop")
       expect(config.docker_compose_file).toBe("./docker-compose.dev.yml")
@@ -84,12 +77,12 @@ env:
       const mockContent = `base_branch: develop`
 
       vi.mocked(existsSync).mockReturnValue(true)
-      vi.mocked(readFileSync).mockReturnValue(mockContent)
+      vi.mocked(fs.readFileSync).mockReturnValue(mockContent)
       vi.mocked(parse).mockReturnValue({
         base_branch: "develop",
       })
 
-      const config = loadConfig(testRepo.path)
+      const config = loadConfig(testRepoPath)
 
       expect(config.base_branch).toBe("develop")
       expect(config.docker_compose_file).toBe("./docker-compose.yml") // default
@@ -103,7 +96,7 @@ env:
         .mockReturnValueOnce(false) // wturbo.yaml
         .mockReturnValueOnce(true) // wturbo.yml
 
-      const result = findConfigFile(testRepo.path)
+      const result = findConfigFile(testRepoPath)
 
       expect(result.exists).toBe(true)
       expect(result.path).toContain("wturbo.yml")
@@ -112,7 +105,7 @@ env:
     it("should return null when no config file exists", () => {
       vi.mocked(existsSync).mockReturnValue(false)
 
-      const result = findConfigFile(testRepo.path)
+      const result = findConfigFile(testRepoPath)
 
       expect(result.exists).toBe(false)
       expect(result.path).toBeNull()
@@ -121,12 +114,12 @@ env:
 
   describe("createDefaultConfig", () => {
     it("should create valid YAML that can be loaded", () => {
-      const configPath = path.join(testRepo.path, "wturbo.yaml")
+      const configPath = path.join(testRepoPath, "wturbo.yaml")
       vi.mocked(existsSync).mockReturnValue(false)
 
       const config = createDefaultConfig(configPath)
 
-      expect(writeFileSync).toHaveBeenCalledWith(
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
         configPath,
         expect.stringContaining('base_branch: "main"'),
         "utf-8"

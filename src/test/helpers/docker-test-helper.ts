@@ -171,7 +171,7 @@ export function updateEnvFile(envFilePath: string, updates: Record<string, strin
  * @param composeFilePath - docker-compose.yml のパス
  * @returns パースされた設定オブジェクト
  */
-export function parseComposeFile(composeFilePath: string): any {
+export function parseComposeFile(composeFilePath: string): unknown {
   const yaml = require("yaml")
   const content = fs.readFileSync(composeFilePath, "utf-8")
   return yaml.parse(content)
@@ -215,12 +215,12 @@ export function cloneDockerEnvWithPortOffset(
   // オフセットを適用した新しいポートを計算
   const newOptions: DockerTestEnvOptions = {
     projectName: `${sourceEnv.COMPOSE_PROJECT_NAME}-wt-${portOffset}`,
-    appPort: parseInt(sourceEnv.APP_PORT || "3000") + portOffset,
-    apiPort: parseInt(sourceEnv.API_PORT || "3000") + portOffset,
-    dbPort: parseInt(sourceEnv.DB_PORT || "5432") + portOffset,
+    appPort: parseInt(sourceEnv.APP_PORT || "3000", 10) + portOffset,
+    apiPort: parseInt(sourceEnv.API_PORT || "3000", 10) + portOffset,
+    dbPort: parseInt(sourceEnv.DB_PORT || "5432", 10) + portOffset,
     dbName: sourceEnv.DB_NAME || "test_db",
-    redisPort: parseInt(sourceEnv.REDIS_PORT || "6379") + portOffset,
-    adminerPort: parseInt(sourceEnv.ADMINER_PORT || "8080") + portOffset,
+    redisPort: parseInt(sourceEnv.REDIS_PORT || "6379", 10) + portOffset,
+    adminerPort: parseInt(sourceEnv.ADMINER_PORT || "8080", 10) + portOffset,
   }
 
   return setupDockerTestEnv(destRepoPath, newOptions)

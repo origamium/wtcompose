@@ -148,7 +148,7 @@ describe("Docker Test Helper", () => {
   describe("cloneDockerEnvWithPortOffset", () => {
     it("should create new environment with offset ports", () => {
       // Setup source environment
-      const sourceEnv = setupDockerTestEnv(testRepo.path, {
+      setupDockerTestEnv(testRepo.path, {
         projectName: "source-project",
         appPort: 3000,
         dbPort: 5432,

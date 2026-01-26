@@ -12,6 +12,7 @@ import { loadConfig } from "../../core/config/loader.js"
 // Core modules
 import { getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { getWorktreePath, listWorktrees, removeWorktree } from "../../core/git/worktree.js"
+import { getErrorMessage } from "../../utils/error.js"
 
 /**
  * removeコマンドを作成
@@ -32,8 +33,8 @@ export function removeCommand(): Command {
     .action(async (branch: string, options: { force?: boolean }) => {
       try {
         await executeRemoveCommand(branch, options)
-      } catch (error: any) {
-        console.error(`Error: ${error.message}`)
+      } catch (error) {
+        console.error(`Error: ${getErrorMessage(error)}`)
         process.exit(EXIT_CODES.GENERAL_ERROR)
       }
     })
@@ -128,8 +129,8 @@ async function executeEndCommand(command: string, worktreePath: string): Promise
       shell: "/bin/sh",
     })
     console.log("  ✅ End command completed successfully")
-  } catch (error: any) {
-    console.log(`  ⚠️  End command failed: ${error.message}`)
+  } catch (error) {
+    console.log(`  ⚠️  End command failed: ${getErrorMessage(error)}`)
     console.log("  (Continuing with worktree removal)")
   }
 }

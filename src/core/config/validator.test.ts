@@ -3,14 +3,13 @@
  * 新しいディレクトリ構造に対応したテストファイル
  */
 
-import * as path from "node:path"
-import { existsSync } from "fs-extra"
+import { existsSync } from "node:fs"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import type { WTurboConfig } from "../../types/index.js"
 import { suggestEnvVarName, validateConfig, validateEnvVarName } from "./validator.js"
 
 // Mock dependencies
-vi.mock("fs-extra", () => ({
+vi.mock("node:fs", () => ({
   existsSync: vi.fn(),
 }))
 
@@ -21,7 +20,6 @@ describe("Config Validator (Refactored)", () => {
 
   describe("validateConfig", () => {
     const configFile = "/test/wturbo.yaml"
-    const configDir = "/test"
 
     beforeEach(() => {
       // Default mock behavior

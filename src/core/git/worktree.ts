@@ -26,8 +26,9 @@ function execGitCommand(command: string, options?: ExecOptions): string {
       ...(options?.env && { env: { ...process.env, ...options.env } }),
     }
     return execSync(command, execOptions).trim()
-  } catch (error: any) {
-    throw new Error(`Git command failed: ${command}\n${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Git command failed: ${command}\n${message}`)
   }
 }
 
@@ -54,7 +55,7 @@ export function listWorktrees(cwd?: string): WorktreeInfo[] {
   try {
     const output = execGitCommand(GIT_COMMANDS.LIST_WORKTREES, { cwd })
     return parseWorktreeList(output)
-  } catch (error) {
+  } catch {
     // worktreeが存在しない場合は空配列を返す
     return []
   }
@@ -152,8 +153,9 @@ export function createWorktree(
   try {
     execGitCommand(command, { cwd })
     console.log(`✅ Created worktree: ${branchName} at ${worktreePath}`)
-  } catch (error: any) {
-    throw new Error(`Failed to create worktree: ${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to create worktree: ${message}`)
   }
 }
 
@@ -185,16 +187,15 @@ export function removeWorktree(
     throw new Error("Not in a Git repository")
   }
 
-  const commandTemplate = force
-    ? GIT_COMMANDS.REMOVE_WORKTREE_FORCE
-    : GIT_COMMANDS.REMOVE_WORKTREE
+  const commandTemplate = force ? GIT_COMMANDS.REMOVE_WORKTREE_FORCE : GIT_COMMANDS.REMOVE_WORKTREE
   const command = commandTemplate.replace("{path}", worktreePath)
 
   try {
     execGitCommand(command, { cwd })
     console.log(`✅ Removed worktree at: ${worktreePath}`)
-  } catch (error: any) {
-    throw new Error(`Failed to remove worktree: ${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to remove worktree: ${message}`)
   }
 }
 

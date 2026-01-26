@@ -3,7 +3,6 @@
  * 新しいディレクトリ構造に対応したテストファイル
  */
 
-import * as path from "node:path"
 import type { Command } from "commander"
 import { existsSync } from "fs-extra"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"

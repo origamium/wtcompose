@@ -7,7 +7,7 @@
 import { existsSync } from "node:fs"
 import * as path from "node:path"
 import { Command } from "commander"
-import { COMPOSE_FILE_NAMES, ENV_FILE_NAMES, EXIT_CODES } from "../../constants/index.js"
+import { ENV_FILE_NAMES, EXIT_CODES } from "../../constants/index.js"
 import {
   getDockerInfo,
   getDockerVolumes,
@@ -19,6 +19,7 @@ import { findComposeFile, readComposeFile } from "../../core/docker/compose.js"
 import { getCurrentBranch, getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { listWorktrees } from "../../core/git/worktree.js"
 import type { CommandOptions } from "../../types/index.js"
+import { getErrorMessage } from "../../utils/error.js"
 
 /**
  * statusコマンドを作成
@@ -39,8 +40,8 @@ export function statusCommand(): Command {
     .action(async (options: CommandOptions) => {
       try {
         await executeStatusCommand(options)
-      } catch (error: any) {
-        console.error(`Error: ${error.message}`)
+      } catch (error) {
+        console.error(`Error: ${getErrorMessage(error)}`)
         process.exit(EXIT_CODES.GENERAL_ERROR)
       }
     })
@@ -140,7 +141,7 @@ async function showWorktreeDockerInfo(worktreePath: string): Promise<void> {
       const config = readComposeFile(composeFilePath)
       const serviceCount = Object.keys(config.services || {}).length
       console.log(`   📦 Services: ${serviceCount}`)
-    } catch (error) {
+    } catch {
       console.log("   ⚠️  Error reading compose file")
     }
   } else {
@@ -190,7 +191,7 @@ async function showDockerStatus(): Promise<void> {
 
     // Docker情報表示
     await showDockerInfo()
-  } catch (error) {
+  } catch {
     console.log("⚠️  Docker is not available or not running")
   }
 }
@@ -271,7 +272,7 @@ async function showDockerInfo(): Promise<void> {
     console.log("🔧 Docker Information")
     console.log(`   ${info.dockerVersion}`)
     console.log(`   Docker Compose: ${info.composeVersion}`)
-  } catch (error) {
+  } catch {
     console.log("⚠️  Could not retrieve Docker version information")
   }
 }

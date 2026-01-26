@@ -48,11 +48,12 @@ export function readComposeFile(filePath: string, options?: FileOperationOptions
     }
 
     return parsed
-  } catch (error: any) {
-    if (error.message.includes("not found")) {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    if (message.includes("not found")) {
       throw error
     }
-    throw new Error(`Failed to parse Docker Compose file: ${error.message}`)
+    throw new Error(`Failed to parse Docker Compose file: ${message}`)
   }
 }
 
@@ -99,8 +100,9 @@ export function writeComposeFile(
     })
 
     console.log(`📄 Wrote Docker Compose file: ${filePath}`)
-  } catch (error: any) {
-    throw new Error(`Failed to write Docker Compose file: ${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Failed to write Docker Compose file: ${message}`)
   }
 }
 
@@ -129,7 +131,7 @@ export function adjustPortsInCompose(config: ComposeConfig, usedPorts: number[])
   const newConfig = JSON.parse(JSON.stringify(config)) as ComposeConfig
   const currentlyUsed = [...usedPorts]
 
-  Object.entries(newConfig.services).forEach(([serviceName, service]) => {
+  Object.entries(newConfig.services).forEach(([, service]) => {
     if (service.ports && Array.isArray(service.ports)) {
       service.ports = service.ports.map((portMapping: string) => {
         if (typeof portMapping !== "string") {
@@ -142,7 +144,7 @@ export function adjustPortsInCompose(config: ComposeConfig, usedPorts: number[])
           return portMapping // 解析できない形式はそのまま
         }
 
-        const [, hostPortStr, containerPort] = match
+        const [, hostPortStr] = match
         const originalHostPort = parseInt(hostPortStr, 10)
         const newHostPort = findAvailablePort(originalHostPort, currentlyUsed)
 
@@ -287,7 +289,7 @@ export function validateComposeConfig(config: ComposeConfig): {
       }
 
       if (service.ports && Array.isArray(service.ports)) {
-        service.ports.forEach((port: any, index: number) => {
+        service.ports.forEach((port, index: number) => {
           if (typeof port !== "string" && typeof port !== "number") {
             warnings.push(`Service '${serviceName}' port[${index}] should be a string or number`)
           }

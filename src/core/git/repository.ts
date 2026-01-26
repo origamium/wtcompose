@@ -4,7 +4,7 @@
  */
 
 import { execSync } from "node:child_process"
-import { EXIT_CODES, FILE_ENCODING, GIT_COMMANDS } from "../../constants/index.js"
+import { FILE_ENCODING, GIT_COMMANDS } from "../../constants/index.js"
 import type { ExecOptions } from "../../types/index.js"
 
 /**
@@ -30,8 +30,9 @@ function execGitCommand(command: string, options?: ExecOptions): string {
       ...(options?.env && { env: { ...process.env, ...options.env } }),
     }
     return execSync(command, execOptions).trim()
-  } catch (error: any) {
-    throw new Error(`Git command failed: ${command}\n${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Git command failed: ${command}\n${message}`)
   }
 }
 

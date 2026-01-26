@@ -24,8 +24,9 @@ function execDockerCommand(command: string, options?: ExecOptions): string {
       ...(options?.env && { env: { ...process.env, ...options.env } }),
     }
     return execSync(command, execOptions).trim()
-  } catch (error: any) {
-    throw new Error(`Docker command failed: ${command}\n${error.message}`)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Docker command failed: ${command}\n${message}`)
   }
 }
 
@@ -229,7 +230,7 @@ export function getUsedPorts(options?: ExecOptions): number[] {
       const match = portMapping.match(/(?:[\d.]+:)?(\d+)(?:->\d+(?:\/\w+)?)?/)
       if (match) {
         const port = parseInt(match[1], 10)
-        if (!isNaN(port) && !ports.includes(port)) {
+        if (!Number.isNaN(port) && !ports.includes(port)) {
           ports.push(port)
         }
       }
@@ -306,7 +307,7 @@ export function getDockerInfo(options?: ExecOptions) {
       composeVersion,
       isAvailable: true,
     }
-  } catch (error) {
+  } catch {
     throw new Error("Docker is not available or not running")
   }
 }

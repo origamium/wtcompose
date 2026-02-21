@@ -3,7 +3,7 @@
  * 新しいディレクトリ構造に対応したテストファイル
  */
 
-import { execSync } from "node:child_process"
+import { execFileSync } from "node:child_process"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
   branchExists,
@@ -15,7 +15,7 @@ import {
 
 // Mock dependencies
 vi.mock("node:child_process", () => ({
-  execSync: vi.fn(),
+  execFileSync: vi.fn(),
 }))
 
 describe("Git Repository Operations (Refactored)", () => {
@@ -27,19 +27,20 @@ describe("Git Repository Operations (Refactored)", () => {
 
   describe("isGitRepository", () => {
     it("should return true when in a git repository", () => {
-      vi.mocked(execSync).mockReturnValue("true\n")
+      vi.mocked(execFileSync).mockReturnValue("true\n")
 
       const result = isGitRepository(testRepoPath)
 
       expect(result).toBe(true)
-      expect(execSync).toHaveBeenCalledWith(
-        "git rev-parse --is-inside-work-tree",
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["rev-parse", "--is-inside-work-tree"],
         expect.objectContaining({ cwd: testRepoPath })
       )
     })
 
     it("should return false when not in a git repository", () => {
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw new Error("Not a git repository")
       })
 
@@ -51,21 +52,22 @@ describe("Git Repository Operations (Refactored)", () => {
 
   describe("getGitRoot", () => {
     it("should return repository root path", () => {
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("true\n") // isGitRepository check
         .mockReturnValueOnce("/path/to/repo\n") // git rev-parse --show-toplevel
 
       const root = getGitRoot(testRepoPath)
 
       expect(root).toBe("/path/to/repo")
-      expect(execSync).toHaveBeenCalledWith(
-        "git rev-parse --show-toplevel",
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["rev-parse", "--show-toplevel"],
         expect.objectContaining({ cwd: testRepoPath })
       )
     })
 
     it("should throw error when not in git repository", () => {
-      vi.mocked(execSync).mockImplementation(() => {
+      vi.mocked(execFileSync).mockImplementation(() => {
         throw new Error("Not a git repository")
       })
 
@@ -75,15 +77,16 @@ describe("Git Repository Operations (Refactored)", () => {
 
   describe("getCurrentBranch", () => {
     it("should return current branch name", () => {
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("true\n") // isGitRepository check
         .mockReturnValueOnce("main\n") // git branch --show-current
 
       const branch = getCurrentBranch(testRepoPath)
 
       expect(branch).toBe("main")
-      expect(execSync).toHaveBeenCalledWith(
-        "git branch --show-current",
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["branch", "--show-current"],
         expect.objectContaining({ cwd: testRepoPath })
       )
     })
@@ -91,21 +94,22 @@ describe("Git Repository Operations (Refactored)", () => {
 
   describe("branchExists", () => {
     it("should return true when branch exists", () => {
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("true\n") // isGitRepository check
         .mockReturnValueOnce("") // git show-ref (success = branch exists)
 
       const exists = branchExists("feature-branch", testRepoPath)
 
       expect(exists).toBe(true)
-      expect(execSync).toHaveBeenCalledWith(
-        "git show-ref --verify --quiet refs/heads/feature-branch",
+      expect(execFileSync).toHaveBeenCalledWith(
+        "git",
+        ["show-ref", "--verify", "--quiet", "refs/heads/feature-branch"],
         expect.objectContaining({ cwd: testRepoPath })
       )
     })
 
     it("should return false when branch does not exist", () => {
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("true\n") // isGitRepository check
         .mockImplementationOnce(() => {
           throw new Error("Branch not found")
@@ -119,7 +123,7 @@ describe("Git Repository Operations (Refactored)", () => {
 
   describe("getRepositoryInfo", () => {
     it("should return complete repository information", () => {
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("true\n") // isGitRepository check (from getRepositoryInfo)
         .mockReturnValueOnce("true\n") // isGitRepository check (from getGitRoot)
         .mockReturnValueOnce("/path/to/repo\n") // getGitRoot
@@ -136,7 +140,7 @@ describe("Git Repository Operations (Refactored)", () => {
     })
 
     it("should detect dirty repository", () => {
-      vi.mocked(execSync)
+      vi.mocked(execFileSync)
         .mockReturnValueOnce("true\n") // isGitRepository check (from getRepositoryInfo)
         .mockReturnValueOnce("true\n") // isGitRepository check (from getGitRoot)
         .mockReturnValueOnce("/path/to/repo\n") // getGitRoot

@@ -3,30 +3,27 @@
  * Git worktreeの作成を担当
  */
 
-import { execSync } from "node:child_process"
 import { existsSync, lstatSync, readlinkSync, statSync, symlinkSync } from "node:fs"
 import * as path from "node:path"
 import { Command } from "commander"
 import fs from "fs-extra"
 import { EXIT_CODES } from "../../constants/index.js"
 import { loadConfig } from "../../core/config/loader.js"
-// Core modules
+import { getUsedPorts } from "../../core/docker/client.js"
+import {
+  adjustPortsInCompose,
+  readComposeFile,
+  writeComposeFile,
+} from "../../core/docker/compose.js"
+import { copyAndAdjustEnvFile } from "../../core/environment/processor.js"
 import { branchExists, getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { createWorktree, getWorktreePath, listWorktrees } from "../../core/git/worktree.js"
-import { copyAndAdjustEnvFile } from "../../core/environment/processor.js"
 import type { WTurboConfig } from "../../types/index.js"
-import { getErrorMessage } from "../../utils/error.js"
+import { CLIError, getErrorMessage } from "../../utils/error.js"
+import { executeLifecycleCommand } from "../../utils/exec.js"
 
 /**
  * createコマンドを作成
- *
- * @returns Commander.js のCommandオブジェクト
- *
- * @example
- * ```typescript
- * const program = new Command()
- * program.addCommand(createCommand())
- * ```
  */
 export function createCommand(): Command {
   return new Command("create")
@@ -38,6 +35,10 @@ export function createCommand(): Command {
       try {
         await executeCreateCommand(branch, options)
       } catch (error) {
+        if (error instanceof CLIError) {
+          console.error(`Error: ${error.message}`)
+          process.exit(error.exitCode)
+        }
         console.error(`Error: ${getErrorMessage(error)}`)
         process.exit(EXIT_CODES.GENERAL_ERROR)
       }
@@ -46,10 +47,6 @@ export function createCommand(): Command {
 
 /**
  * createコマンドのメイン実行ロジック
- *
- * @param branch - ブランチ名
- * @param options - コマンドオプション
- * @throws {Error} 実行に失敗した場合
  */
 async function executeCreateCommand(
   branch: string,
@@ -57,8 +54,7 @@ async function executeCreateCommand(
 ): Promise<void> {
   // Git リポジトリチェック
   if (!isGitRepository()) {
-    console.error("Error: Not in a git repository")
-    process.exit(EXIT_CODES.NOT_GIT_REPOSITORY)
+    throw new CLIError("Not in a git repository", EXIT_CODES.NOT_GIT_REPOSITORY)
   }
 
   const gitRoot = getGitRoot()
@@ -66,8 +62,10 @@ async function executeCreateCommand(
   // 既存のworktreeチェック
   const existingPath = getWorktreePath(branch)
   if (existingPath) {
-    console.error(`Error: Worktree for branch '${branch}' already exists at: ${existingPath}`)
-    process.exit(EXIT_CODES.GENERAL_ERROR)
+    throw new CLIError(
+      `Worktree for branch '${branch}' already exists at: ${existingPath}`,
+      EXIT_CODES.GENERAL_ERROR
+    )
   }
 
   // ブランチ名のサニタイズ（パス用）
@@ -86,10 +84,10 @@ async function executeCreateCommand(
 
   // --no-create-branch が指定されたのに対象ブランチが存在しない場合はエラー
   if (options.createBranch === false && !branchAlreadyExists) {
-    console.error(
-      `Error: Branch '${branch}' does not exist. Remove --no-create-branch to create it.`
+    throw new CLIError(
+      `Branch '${branch}' does not exist. Remove --no-create-branch to create it.`,
+      EXIT_CODES.GENERAL_ERROR
     )
-    process.exit(EXIT_CODES.GENERAL_ERROR)
   }
 
   const useExistingBranch = branchAlreadyExists || options.createBranch === false
@@ -99,16 +97,19 @@ async function executeCreateCommand(
     console.log(`✨ Creating new branch: ${branch}`)
   }
 
-  // worktreeを作成（既存ブランチの場合は useExistingBranch オプションを使用）
-  createWorktree(branch, worktreePath, { useExistingBranch })
-
-  // 設定ファイルを読み込み、copy_files / link_files を処理
+  // 設定ファイルを先に読み込み（base_branch を worktree 作成前に取得するため）
   const config = loadConfig(gitRoot)
+
+  // worktreeを作成（新規ブランチの場合は base_branch を使用）
+  createWorktree(branch, worktreePath, {
+    useExistingBranch,
+    baseBranch: useExistingBranch ? undefined : config.base_branch,
+  })
 
   // link_files に含まれるパスはコピーをスキップしてシンボリックリンクを優先する
   const linkFileSet = new Set(config.link_files ?? [])
-
   const filesToCopy = (config.copy_files ?? []).filter((p) => !linkFileSet.has(p))
+
   if (filesToCopy.length > 0) {
     console.log("")
     console.log("📋 Copying files/directories...")
@@ -121,12 +122,21 @@ async function executeCreateCommand(
     await linkConfiguredFiles(gitRoot, worktreePath, config.link_files)
   }
 
-  // env.adjustの適用（env.fileに記載されたファイルにenv.adjustを適用してworktreeにコピー）
-  if (config.env.file.length > 0 && Object.keys(config.env.adjust).length > 0) {
+  // env.file の処理
+  // adjust あり → 調整コピー、なし → 通常コピー（どちらも env.file が空でない場合のみ）
+  if (config.env.file.length > 0) {
     console.log("")
-    console.log("🔧 Adjusting environment files...")
-    await applyEnvAdjustments(gitRoot, worktreePath, config)
+    if (Object.keys(config.env.adjust).length > 0) {
+      console.log("🔧 Adjusting environment files...")
+      await applyEnvAdjustments(gitRoot, worktreePath, config)
+    } else {
+      console.log("📋 Copying environment files...")
+      await copyConfiguredFiles(gitRoot, worktreePath, config.env.file)
+    }
   }
+
+  // Docker Compose のセットアップ（compose ファイルのコピー + ポート調整）
+  await setupDockerCompose(gitRoot, worktreePath, config)
 
   // start_commandの実行
   if (config.start_command) {
@@ -143,7 +153,6 @@ async function executeCreateCommand(
   console.log(`  cd ${worktreePath}`)
   console.log("  # Start working on your branch")
 
-  // 現在のworktree一覧を表示
   console.log("")
   console.log("📋 Current worktrees:")
   const worktrees = listWorktrees()
@@ -155,10 +164,6 @@ async function executeCreateCommand(
 
 /**
  * 設定ファイルで指定されたファイル/ディレクトリをworktreeにコピー
- *
- * @param sourceRoot - コピー元のルートディレクトリ（gitルート）
- * @param targetRoot - コピー先のルートディレクトリ（worktreeパス）
- * @param copyFiles - コピーするファイル/ディレクトリのパス一覧
  */
 async function copyConfiguredFiles(
   sourceRoot: string,
@@ -178,12 +183,9 @@ async function copyConfiguredFiles(
       const stat = statSync(sourcePath)
 
       if (stat.isDirectory()) {
-        // ディレクトリの場合は再帰的にコピー
         await fs.copy(sourcePath, targetPath, { overwrite: true })
         console.log(`  ✅ Copied directory: ${relativePath}`)
       } else {
-        // ファイルの場合は単純コピー
-        // 親ディレクトリが存在しない場合は作成
         await fs.ensureDir(path.dirname(targetPath))
         await fs.copy(sourcePath, targetPath, { overwrite: true })
         console.log(`  ✅ Copied file: ${relativePath}`)
@@ -196,10 +198,6 @@ async function copyConfiguredFiles(
 
 /**
  * 設定ファイルで指定されたファイル/ディレクトリをworktreeにシンボリックリンクで張る
- *
- * @param sourceRoot - リンク元のルートディレクトリ（gitルート）
- * @param targetRoot - リンク先のルートディレクトリ（worktreeパス）
- * @param linkFiles - シンボリックリンクを張るファイル/ディレクトリのパス一覧
  */
 async function linkConfiguredFiles(
   sourceRoot: string,
@@ -216,10 +214,8 @@ async function linkConfiguredFiles(
     }
 
     try {
-      // 親ディレクトリを確保
       await fs.ensureDir(path.dirname(targetPath))
 
-      // ターゲットが既に存在するか確認（シンボリックリンクも含む lstatSync を使用）
       let targetExists = false
       try {
         lstatSync(targetPath)
@@ -243,7 +239,6 @@ async function linkConfiguredFiles(
             console.log(`  ✅ Symlink already correct: ${relativePath}`)
             continue
           }
-          // 既存シンボリックリンクが別のターゲットを指している → 置換
           await fs.remove(targetPath)
           console.log(`  🔄 Replacing symlink (was → ${currentLink}): ${relativePath}`)
         } else if (targetStat.isDirectory()) {
@@ -265,21 +260,13 @@ async function linkConfiguredFiles(
 
 /**
  * start_commandを実行
- *
- * @param command - 実行するコマンド（スクリプトパス）
- * @param worktreePath - worktreeのパス（作業ディレクトリ）
  */
 async function executeStartCommand(command: string, worktreePath: string): Promise<void> {
   try {
-    // コマンドがスクリプトファイルの場合、worktree内のパスを使用
     const commandPath = path.resolve(worktreePath, command)
     const actualCommand = existsSync(commandPath) ? commandPath : command
 
-    execSync(actualCommand, {
-      cwd: worktreePath,
-      stdio: "inherit",
-      shell: "/bin/sh",
-    })
+    executeLifecycleCommand(actualCommand, worktreePath)
     console.log("  ✅ Start command completed successfully")
   } catch (error) {
     console.log(`  ⚠️  Start command failed: ${getErrorMessage(error)}`)
@@ -288,11 +275,55 @@ async function executeStartCommand(command: string, worktreePath: string): Promi
 }
 
 /**
+ * Docker Compose ファイルをworktreeにコピーし、ポートを調整する
+ * Docker が利用できない場合は無調整でコピーする
+ */
+async function setupDockerCompose(
+  gitRoot: string,
+  worktreePath: string,
+  config: WTurboConfig
+): Promise<void> {
+  if (!config.docker_compose_file) return
+
+  const sourceComposePath = path.resolve(gitRoot, config.docker_compose_file)
+  if (!existsSync(sourceComposePath)) return
+
+  const targetComposePath = path.resolve(worktreePath, config.docker_compose_file)
+
+  // ターゲットに既にファイルが存在する場合はスキップ（start_command 等でコピー済みの場合）
+  if (existsSync(targetComposePath)) return
+
+  try {
+    console.log("")
+    console.log("🐳 Configuring Docker Compose...")
+
+    const composeConfig = readComposeFile(sourceComposePath)
+
+    // 実行中のコンテナのポートを取得してポート衝突を避ける
+    // Docker が利用できない場合は空配列になる（エラーは無視）
+    let usedPorts: number[] = []
+    try {
+      usedPorts = getUsedPorts()
+    } catch {
+      // Docker が利用できない場合はポート調整なし
+    }
+
+    const adjustedConfig = adjustPortsInCompose(composeConfig, usedPorts)
+    await fs.ensureDir(path.dirname(targetComposePath))
+    writeComposeFile(targetComposePath, adjustedConfig)
+    console.log(`  ✅ Docker Compose file configured: ${config.docker_compose_file}`)
+
+    // start_command がない場合は使い方を提案
+    if (!config.start_command) {
+      console.log("  ℹ️  Tip: Run 'docker compose up -d' in the worktree to start services")
+    }
+  } catch (error) {
+    console.log(`  ⚠️  Docker Compose setup skipped: ${getErrorMessage(error)}`)
+  }
+}
+
+/**
  * env.fileに記載された環境変数ファイルをworktreeにコピーしenv.adjustを適用
- *
- * @param sourceRoot - コピー元ルートディレクトリ（gitルート）
- * @param targetRoot - コピー先ルートディレクトリ（worktreeパス）
- * @param config - WTurbo設定オブジェクト
  */
 async function applyEnvAdjustments(
   sourceRoot: string,

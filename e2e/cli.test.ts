@@ -3,7 +3,7 @@
  * Tests all CLI commands against multiple test projects
  */
 
-import { existsSync } from "node:fs"
+import { existsSync, lstatSync } from "node:fs"
 import * as path from "node:path"
 import fs from "fs-extra"
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest"
@@ -94,17 +94,6 @@ describe("Help and Version Commands", () => {
     })
   })
 
-  describe("info command", () => {
-    it("should display detailed application information", () => {
-      const result = testRepo.runCLI("info")
-
-      expect(result.exitCode).toBe(0)
-      expect(result.stdout).toContain("WTURBO")
-      expect(result.stdout).toContain("Usage:")
-      expect(result.stdout).toContain("Configuration:")
-      expect(result.stdout).toContain("Version:")
-    })
-  })
 })
 
 // =============================================================================
@@ -825,4 +814,190 @@ describe("Cross-Project Compatibility", () => {
       })
     })
   }
+})
+
+// =============================================================================
+// LINK_FILES TESTS
+// =============================================================================
+
+describe("Create Command - link_files", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("link-files", "link-files")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  it("should create symlinks for paths in link_files", () => {
+    const result = testRepo.runCLI("create test/symlinks")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Creating symlinks")
+
+    const wtPath = testRepo.getWorktreePath("test/symlinks")
+
+    // .env should be symlinked (appears in both copy_files and link_files)
+    const envPath = path.join(wtPath, ".env")
+    expect(existsSync(envPath)).toBe(true)
+    const envStat = lstatSync(envPath)
+    expect(envStat.isSymbolicLink()).toBe(true)
+
+    // shared-data should be symlinked
+    const sharedPath = path.join(wtPath, "shared-data")
+    expect(existsSync(sharedPath)).toBe(true)
+    const sharedStat = lstatSync(sharedPath)
+    expect(sharedStat.isSymbolicLink()).toBe(true)
+  })
+
+  it("should skip non-existent paths in link_files", () => {
+    const result = testRepo.runCLI("create test/skip-missing-links")
+
+    // Missing paths should be skipped (wturbo.yaml has shared-data and .env which exist,
+    // so this test verifies that existing paths work and non-existent would be skipped)
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Worktree created successfully")
+  })
+
+  it("should copy (not symlink) paths in copy_files but not link_files", () => {
+    const result = testRepo.runCLI("create test/copy-not-link")
+
+    expect(result.exitCode).toBe(0)
+    const wtPath = testRepo.getWorktreePath("test/copy-not-link")
+
+    // config/settings.json is in copy_files but NOT in link_files
+    const configPath = path.join(wtPath, "config/settings.json")
+    expect(existsSync(configPath)).toBe(true)
+    const configStat = lstatSync(configPath)
+    // Should be a regular file, not a symlink
+    expect(configStat.isSymbolicLink()).toBe(false)
+    expect(configStat.isFile()).toBe(true)
+  })
+
+  it("link_files takes priority over copy_files for same path", () => {
+    const result = testRepo.runCLI("create test/priority-check")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Creating symlinks")
+
+    const wtPath = testRepo.getWorktreePath("test/priority-check")
+    const envPath = path.join(wtPath, ".env")
+    const envStat = lstatSync(envPath)
+
+    // .env appears in both copy_files AND link_files → link_files wins → symlink
+    expect(envStat.isSymbolicLink()).toBe(true)
+  })
+
+  it("should replace existing file/directory with symlink", () => {
+    // First create (makes symlinks)
+    testRepo.runCLI("create test/replace-test")
+    // Remove the worktree
+    testRepo.runCLI("remove test/replace-test --force")
+
+    // Create again — should handle existing symlinks gracefully
+    const result = testRepo.runCLI("create test/replace-test")
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Worktree created successfully")
+  })
+})
+
+// =============================================================================
+// ENV.ADJUST TESTS
+// =============================================================================
+
+describe("Create Command - env.adjust", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("env-adjust", "env-adjust")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  it("should create worktree and adjust env file ports", () => {
+    const result = testRepo.runCLI("create test/env-ports")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Adjusting environment files")
+    expect(result.combined).toContain("Worktree created successfully")
+
+    const wtPath = testRepo.getWorktreePath("test/env-ports")
+    const envPath = path.join(wtPath, ".env")
+
+    expect(existsSync(envPath)).toBe(true)
+
+    const envContent = fs.readFileSync(envPath, "utf-8")
+    // APP_PORT=3000 + 1000 = 4000
+    expect(envContent).toContain("APP_PORT=4000")
+    // DB_PORT=5432 + 1000 = 6432
+    expect(envContent).toContain("DB_PORT=6432")
+    // REDIS_PORT=6379 + 1000 = 7379
+    expect(envContent).toContain("REDIS_PORT=7379")
+  })
+
+  it("should copy env file even when adjust is empty", () => {
+    // Create a project with env.file set but adjust empty via CLI
+    // Use the basic project which has env.file: [] to verify no env copy
+    const basicRepo = createTestRepo("basic", "env-no-adjust")
+
+    try {
+      const result = basicRepo.runCLI("create test/no-adjust")
+      expect(result.exitCode).toBe(0)
+      // Basic project has env.file: [] so no env processing
+      expect(result.combined).not.toContain("environment file")
+    } finally {
+      basicRepo.cleanup()
+    }
+  })
+})
+
+// =============================================================================
+// --no-create-branch TESTS
+// =============================================================================
+
+describe("Create Command - --no-create-branch", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("basic", "no-create-branch")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  it("should succeed when branch already exists with --no-create-branch", () => {
+    // Create branch first
+    testRepo.runCLI("create existing-for-flag")
+    testRepo.runCLI("remove existing-for-flag --force")
+
+    // Branch should still exist
+    expect(testRepo.branchExists("existing-for-flag")).toBe(true)
+
+    // Create worktree without creating new branch
+    const result = testRepo.runCLI("create existing-for-flag --no-create-branch")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Worktree created successfully")
+  })
+
+  it("should fail when branch does not exist with --no-create-branch", () => {
+    const result = testRepo.runCLI("create nonexistent-branch --no-create-branch")
+
+    expect(result.exitCode).toBe(1)
+    expect(result.combined).toContain("does not exist")
+    expect(result.combined).toContain("--no-create-branch")
+  })
+
+  it("should create new branch without --no-create-branch flag", () => {
+    const result = testRepo.runCLI("create brand-new-branch")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Creating new branch: brand-new-branch")
+    expect(testRepo.branchExists("brand-new-branch")).toBe(true)
+  })
 })

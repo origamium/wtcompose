@@ -12,30 +12,18 @@ import type { WTurboConfig } from "../../types/index.js"
  * バリデーションエラー情報
  */
 interface ValidationError {
-  /** エラーメッセージ */
   message: string
-  /** エラーが発生したフィールドパス */
   field: string
-  /** エラーの重要度 */
   severity: "error" | "warning"
 }
 
 /**
  * WTurbo設定ファイルをバリデートする
+ * 警告は stderr に出力し、エラーは例外をスロー
  *
  * @param config - 検証する設定オブジェクト
  * @param configFile - 設定ファイルのパス（相対パス解決用）
  * @throws {Error} バリデーションエラーが発生した場合
- *
- * @example
- * ```typescript
- * try {
- *   validateConfig(config, '/project/wturbo.yaml')
- *   console.log('Configuration is valid')
- * } catch (error) {
- *   console.error('Validation failed:', error.message)
- * }
- * ```
  */
 export function validateConfig(config: WTurboConfig, configFile: string): void {
   const errors: ValidationError[] = []
@@ -51,6 +39,8 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
   }
 
   // docker_compose_fileの検証
+  // Docker Compose v2 では version フィールドは不要で compose ファイル自体も任意
+  // → 存在しない場合は warning のみ（error ではない）
   if (!config.docker_compose_file || typeof config.docker_compose_file !== "string") {
     errors.push({
       message: "docker_compose_file must be a non-empty string",
@@ -63,7 +53,7 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
       errors.push({
         message: `docker_compose_file not found: ${config.docker_compose_file}`,
         field: "docker_compose_file",
-        severity: "error",
+        severity: "warning",
       })
     }
   }
@@ -154,7 +144,11 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
         } else {
           const envPath = path.resolve(configDir, envFile)
           if (!existsSync(envPath)) {
-            console.log(`⚠️  Environment file not found: ${envFile}`)
+            errors.push({
+              message: `env.file not found: ${envFile}`,
+              field: `env.file[${index}]`,
+              severity: "warning",
+            })
           }
         }
       })
@@ -180,30 +174,23 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
     }
   }
 
-  if (errors.length > 0) {
-    const errorMessages = errors
-      .filter((e) => e.severity === "error")
-      .map((e) => `  - ${e.message}`)
-      .join("\\n")
+  // 警告を stderr に出力
+  const warnings = errors.filter((e) => e.severity === "warning")
+  for (const w of warnings) {
+    process.stderr.write(`⚠️  Config warning [${w.field}]: ${w.message}\n`)
+  }
 
-    throw new Error(`Configuration validation failed:\\n${errorMessages}`)
+  // エラーがあれば例外をスロー
+  const hardErrors = errors.filter((e) => e.severity === "error")
+  if (hardErrors.length > 0) {
+    const errorMessages = hardErrors.map((e) => `  - ${e.message}`).join("\n")
+    throw new Error(`Configuration validation failed:\n${errorMessages}`)
   }
 }
 
 /**
- * 環境変数名が有効かチェック
- * 環境変数名は大文字、数字、アンダースコアのみで構成され、数字で始まってはいけない
- *
- * @param name - チェックする環境変数名
- * @returns 有効な環境変数名かどうか
- *
- * @example
- * ```typescript
- * console.log(validateEnvVarName('APP_PORT'))     // true
- * console.log(validateEnvVarName('app_port'))     // false (小文字)
- * console.log(validateEnvVarName('123_VAR'))      // false (数字始まり)
- * console.log(validateEnvVarName('APP-PORT'))     // false (ハイフン)
- * ```
+ * 環境変数名が有効かチェック（POSIX準拠）
+ * 環境変数名は英字またはアンダースコアで始まり、英数字とアンダースコアのみ使用可
  */
 export function validateEnvVarName(name: string): boolean {
   return ENV_VAR_PATTERNS.VALID_NAME.test(name)
@@ -211,27 +198,15 @@ export function validateEnvVarName(name: string): boolean {
 
 /**
  * 無効な環境変数名を有効な形式に修正する
- *
- * @param name - 修正する環境変数名
- * @returns 修正された環境変数名
- *
- * @example
- * ```typescript
- * console.log(suggestEnvVarName('app-port'))      // 'APP_PORT'
- * console.log(suggestEnvVarName('123_var'))       // '_123_VAR'
- * console.log(suggestEnvVarName('my__var__'))     // 'MY_VAR'
- * console.log(suggestEnvVarName('__leading'))     // 'LEADING'
- * ```
  */
 export function suggestEnvVarName(name: string): string {
   const result = name
     .toUpperCase()
     .replace(ENV_VAR_PATTERNS.INVALID_CHARS, "_")
-    .replace(ENV_VAR_PATTERNS.STARTS_WITH_NUMBER, "_$1") // 数字始まりの場合は前にアンダースコアを追加
-    .replace(ENV_VAR_PATTERNS.MULTIPLE_UNDERSCORES, "_") // 連続するアンダースコアを単一に
-    .replace(/_{0,1}$/, "") // 末尾のアンダースコアを削除
+    .replace(ENV_VAR_PATTERNS.STARTS_WITH_NUMBER, "_$1")
+    .replace(ENV_VAR_PATTERNS.MULTIPLE_UNDERSCORES, "_")
+    .replace(/_{0,1}$/, "")
 
-  // 先頭のアンダースコアは、数字対応で追加されたもの以外は削除
   if (result.startsWith("_") && !/^_[0-9]/.test(result)) {
     return result.replace(/^_+/, "")
   }
@@ -241,24 +216,6 @@ export function suggestEnvVarName(name: string): string {
 
 /**
  * 設定オブジェクト内の環境変数名をすべて検証し、問題があれば修正案を提示
- *
- * @param config - 検証する設定オブジェクト
- * @returns 修正案のマップ（元の名前 -> 修正後の名前）
- *
- * @example
- * ```typescript
- * const config = {
- *   env: {
- *     adjust: {
- *       'app-port': 3000,
- *       '123_var': 'value'
- *     }
- *   }
- * }
- *
- * const suggestions = validateConfigEnvVars(config)
- * // 結果: { 'app-port': 'APP_PORT', '123_var': '_123_VAR' }
- * ```
  */
 export function validateConfigEnvVars(config: WTurboConfig): Record<string, string> {
   const suggestions: Record<string, string> = {}

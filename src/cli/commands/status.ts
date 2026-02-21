@@ -237,10 +237,7 @@ async function showRunningContainers(): Promise<void> {
 async function showDockerVolumes(): Promise<void> {
   const volumes = getDockerVolumes()
   const wturboVolumes = volumes.filter(
-    (v) =>
-      v.name.includes("wturbo") ||
-      v.name.match(/.*-.*wturbo.*/) ||
-      v.name.includes("worktree")
+    (v) => v.name.includes("wturbo") || v.name.match(/.*-.*wturbo.*/) || v.name.includes("worktree")
   )
 
   console.log(`🗂️  Total Volumes: ${volumes.length}`)

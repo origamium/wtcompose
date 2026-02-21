@@ -61,10 +61,12 @@ wturbo create bugfix/urgent-fix
 ```
 
 **処理内容:**
-1. `git worktree add` でブランチ用の作業ディレクトリを作成
+1. `git worktree add` でブランチ用の作業ディレクトリを作成（`base_branch` からブランチを作成）
 2. `copy_files` で指定したファイルをコピー
 3. `link_files` で指定したファイル/ディレクトリにsymlinkを作成（`copy_files` より優先）
-4. `start_command` を実行（設定時のみ）
+4. `env.file` で指定した環境変数ファイルをコピー（`env.adjust` が設定されている場合はポート等を調整してコピー）
+5. `docker_compose_file` が設定・存在する場合は worktree にコピーしてポート衝突を自動調整
+6. `start_command` を実行（設定時のみ）
 
 **オプション:**
 - `-p, --path <path>` - worktreeの作成場所を指定（デフォルト: 親ディレクトリに `worktree-<branch名>` で作成）
@@ -79,8 +81,9 @@ wturbo remove feature/new-feature
 ```
 
 **処理内容:**
-1. `end_command` を実行（設定時のみ）
-2. `git worktree remove` でworktreeを削除
+1. `docker_compose_file` が worktree に存在する場合は `docker compose down` を実行（`end_command` が未設定の場合）
+2. `end_command` を実行（設定時のみ）
+3. `git worktree remove` でworktreeを削除
 
 **オプション:**
 - `-f, --force` - 未コミットの変更があっても強制削除
@@ -103,7 +106,14 @@ wturbo status
 
 ## 設定ファイル
 
-`wturbo.yaml`, `wturbo.yml`, `.wturbo.yaml`, `.wturbo.yml` のいずれかをプロジェクトルートに配置します。
+以下のいずれかのパスに設定ファイルを配置します（優先順位順）:
+
+- `wturbo.yaml`
+- `wturbo.yml`
+- `.wturbo.yaml`
+- `.wturbo.yml`
+- `.wturbo/config.yaml`
+- `.wturbo/config.yml`
 
 ### 基本設定
 

@@ -128,7 +128,7 @@ export function writeComposeFile(
  */
 export function adjustPortsInCompose(config: ComposeConfig, usedPorts: number[]): ComposeConfig {
   // 深いコピーを作成して元のオブジェクトを変更しない
-  const newConfig = JSON.parse(JSON.stringify(config)) as ComposeConfig
+  const newConfig = structuredClone(config) as ComposeConfig
   const currentlyUsed = [...usedPorts]
 
   Object.entries(newConfig.services).forEach(([, service]) => {
@@ -274,9 +274,9 @@ export function validateComposeConfig(config: ComposeConfig): {
   const errors: string[] = []
   const warnings: string[] = []
 
-  // バージョンチェック
+  // バージョンチェック（Docker Compose v2 では version フィールドは任意）
   if (!config.version) {
-    errors.push("Missing version field")
+    warnings.push("Missing version field (optional in Docker Compose v2)")
   }
 
   // サービスチェック

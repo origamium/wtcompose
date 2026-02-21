@@ -4,28 +4,21 @@
  * パフォーマンスを考慮したrsyncベースの実装
  */
 
-import { execSync, spawn } from "node:child_process"
+import { spawn } from "node:child_process"
 import { FILE_ENCODING } from "../../constants/index.js"
+import { execDockerSafe } from "../../utils/exec.js"
 
 /**
  * ボリュームコピーの進捗情報
  */
 export interface VolumeCopyProgress {
-  /** コピー元ボリューム名 */
   sourceVolume: string
-  /** コピー先ボリューム名 */
   targetVolume: string
-  /** 進捗率 (0-100) */
   percentage: number
-  /** 転送済みバイト数 */
   bytesTransferred: number
-  /** 総バイト数 */
   totalBytes: number
-  /** 転送速度 (bytes/sec) */
   speed: number
-  /** 残り時間（秒） */
   eta: number
-  /** 現在処理中のファイル */
   currentFile?: string
 }
 
@@ -33,15 +26,10 @@ export interface VolumeCopyProgress {
  * ボリュームコピーのオプション
  */
 export interface VolumeCopyOptions {
-  /** 進捗コールバック */
   onProgress?: (progress: VolumeCopyProgress) => void
-  /** 差分コピーを使用するか（デフォルト: true） */
   incremental?: boolean
-  /** 圧縮を使用するか（デフォルト: true、ネットワーク経由の場合に有効） */
   compress?: boolean
-  /** コピー完了後にソースを削除するか */
   deleteSource?: boolean
-  /** 並列コピーのワーカー数 */
   parallelWorkers?: number
 }
 
@@ -56,17 +44,6 @@ export interface VolumeDetails {
   createdAt: string
 }
 
-// Note: isRsyncAvailable is not currently used but kept for future optimization
-// when we want to dynamically choose between rsync and cp based on availability
-// function isRsyncAvailable(): boolean {
-//   try {
-//     execSync("docker run --rm alpine which rsync", { stdio: "pipe" })
-//     return true
-//   } catch {
-//     return false
-//   }
-// }
-
 /**
  * ボリュームのサイズを取得
  *
@@ -75,10 +52,19 @@ export interface VolumeDetails {
  */
 export function getVolumeSize(volumeName: string): number {
   try {
-    const output = execSync(
-      `docker run --rm -v ${volumeName}:/data alpine sh -c "du -sb /data 2>/dev/null | cut -f1"`,
-      { encoding: FILE_ENCODING, stdio: "pipe" }
-    ).trim()
+    const output = execDockerSafe(
+      [
+        "run",
+        "--rm",
+        "-v",
+        `${volumeName}:/data`,
+        "alpine",
+        "sh",
+        "-c",
+        "du -sb /data 2>/dev/null | cut -f1",
+      ],
+      {}
+    )
     return parseInt(output, 10) || 0
   } catch {
     return 0
@@ -93,10 +79,16 @@ export function getVolumeSize(volumeName: string): number {
  */
 export function getVolumeDetails(volumeName: string): VolumeDetails | null {
   try {
-    const output = execSync(
-      `docker volume inspect ${volumeName} --format '{{.Name}}\t{{.Driver}}\t{{.Mountpoint}}\t{{.CreatedAt}}'`,
-      { encoding: FILE_ENCODING, stdio: "pipe" }
-    ).trim()
+    const output = execDockerSafe(
+      [
+        "volume",
+        "inspect",
+        volumeName,
+        "--format",
+        "{{.Name}}\t{{.Driver}}\t{{.Mountpoint}}\t{{.CreatedAt}}",
+      ],
+      {}
+    )
 
     const [name, driver, mountpoint, createdAt] = output.split("\t")
     const size = getVolumeSize(volumeName)
@@ -114,7 +106,7 @@ export function getVolumeDetails(volumeName: string): VolumeDetails | null {
  * @param driver - ドライバー（デフォルト: local）
  */
 export function createVolume(volumeName: string, driver: string = "local"): void {
-  execSync(`docker volume create --driver ${driver} ${volumeName}`, { stdio: "pipe" })
+  execDockerSafe(["volume", "create", "--driver", driver, volumeName], {})
 }
 
 /**
@@ -124,8 +116,8 @@ export function createVolume(volumeName: string, driver: string = "local"): void
  * @param force - 強制削除
  */
 export function removeVolume(volumeName: string, force: boolean = false): void {
-  const forceFlag = force ? " -f" : ""
-  execSync(`docker volume rm${forceFlag} ${volumeName}`, { stdio: "pipe" })
+  const args = force ? ["volume", "rm", "-f", volumeName] : ["volume", "rm", volumeName]
+  execDockerSafe(args, {})
 }
 
 /**
@@ -135,14 +127,6 @@ export function removeVolume(volumeName: string, force: boolean = false): void {
  * @param targetVolume - コピー先ボリューム名
  * @param options - コピーオプション
  * @returns コピー結果のPromise
- *
- * @example
- * ```typescript
- * await copyVolumeWithRsync('source-vol', 'target-vol', {
- *   onProgress: (p) => console.log(`${p.percentage}% complete`),
- *   incremental: true
- * })
- * ```
  */
 export async function copyVolumeWithRsync(
   sourceVolume: string,
@@ -151,29 +135,22 @@ export async function copyVolumeWithRsync(
 ): Promise<void> {
   const { onProgress, incremental = true, compress = false } = options
 
-  // ターゲットボリュームを作成（存在しない場合）
   try {
     createVolume(targetVolume)
   } catch {
     // 既に存在する場合は無視
   }
 
-  // ソースボリュームのサイズを取得
   const totalBytes = getVolumeSize(sourceVolume)
 
-  // rsyncオプションを構築
-  const rsyncFlags = [
-    "-a", // アーカイブモード（パーミッション保持）
-    "--info=progress2", // 進捗表示
-    "--no-inc-recursive", // 最初にファイルリストを構築（進捗計算用）
-  ]
+  const rsyncFlags = ["-a", "--info=progress2", "--no-inc-recursive"]
 
   if (incremental) {
-    rsyncFlags.push("--delete") // 差分同期時に不要ファイルを削除
+    rsyncFlags.push("--delete")
   }
 
   if (compress) {
-    rsyncFlags.push("-z") // 圧縮
+    rsyncFlags.push("-z")
   }
 
   const rsyncCommand = `rsync ${rsyncFlags.join(" ")} /source/ /target/`
@@ -205,8 +182,6 @@ export async function copyVolumeWithRsync(
     dockerProcess.stdout.on("data", (data: Buffer) => {
       const output = data.toString()
 
-      // rsync --info=progress2 の出力をパース
-      // 例: "1,234,567  45%   12.34MB/s    0:01:23"
       const progressMatch = output.match(/(\d[\d,]*)\s+(\d+)%\s+([\d.]+\w+\/s)\s+(\d+:\d+:\d+)/)
 
       if (progressMatch && onProgress) {
@@ -215,7 +190,6 @@ export async function copyVolumeWithRsync(
         const speedStr = progressMatch[3]
         const etaStr = progressMatch[4]
 
-        // 速度をパース (例: "12.34MB/s" -> bytes/sec)
         const speedMatch = speedStr.match(/([\d.]+)(\w+)/)
         let speed = 0
         if (speedMatch) {
@@ -230,7 +204,6 @@ export async function copyVolumeWithRsync(
           speed = value * (multipliers[unit] || 1)
         }
 
-        // ETAをパース (例: "0:01:23" -> 秒)
         const etaParts = etaStr.split(":").map(Number)
         const eta = etaParts[0] * 3600 + etaParts[1] * 60 + etaParts[2]
 
@@ -249,7 +222,6 @@ export async function copyVolumeWithRsync(
     })
 
     dockerProcess.stderr.on("data", (data: Buffer) => {
-      // rsyncのエラー出力を処理
       const error = data.toString()
       if (error.includes("error") || error.includes("failed")) {
         console.error("rsync error:", error)
@@ -258,7 +230,6 @@ export async function copyVolumeWithRsync(
 
     dockerProcess.on("close", (code) => {
       if (code === 0) {
-        // 完了時に100%を通知
         if (onProgress) {
           onProgress({
             ...lastProgress,
@@ -279,18 +250,17 @@ export async function copyVolumeWithRsync(
 }
 
 /**
- * 従来のcpコマンドを使用したボリュームコピー（フォールバック用）
+ * cpコマンドを使用したボリュームコピー（フォールバック用）
  *
  * @param sourceVolume - コピー元ボリューム名
  * @param targetVolume - コピー先ボリューム名
- * @param onProgress - 進捗コールバック（開始/終了のみ）
+ * @param onProgress - 進捗コールバック
  */
 export async function copyVolumeWithCp(
   sourceVolume: string,
   targetVolume: string,
   onProgress?: (progress: VolumeCopyProgress) => void
 ): Promise<void> {
-  // ターゲットボリュームを作成
   try {
     createVolume(targetVolume)
   } catch {
@@ -299,7 +269,6 @@ export async function copyVolumeWithCp(
 
   const totalBytes = getVolumeSize(sourceVolume)
 
-  // 開始通知
   if (onProgress) {
     onProgress({
       sourceVolume,
@@ -312,13 +281,22 @@ export async function copyVolumeWithCp(
     })
   }
 
-  // cpコマンドでコピー
-  execSync(
-    `docker run --rm -v ${sourceVolume}:/source:ro -v ${targetVolume}:/target alpine sh -c "cp -a /source/. /target/"`,
-    { stdio: "pipe" }
+  execDockerSafe(
+    [
+      "run",
+      "--rm",
+      "-v",
+      `${sourceVolume}:/source:ro`,
+      "-v",
+      `${targetVolume}:/target`,
+      "alpine",
+      "sh",
+      "-c",
+      "cp -a /source/. /target/",
+    ],
+    {}
   )
 
-  // 完了通知
   if (onProgress) {
     onProgress({
       sourceVolume,
@@ -340,23 +318,12 @@ export async function copyVolumeWithCp(
  * @param targetVolume - コピー先ボリューム名
  * @param options - コピーオプション
  * @returns コピー結果のPromise
- *
- * @example
- * ```typescript
- * // プログレスバー付きでコピー
- * await copyVolume('db-data', 'db-data-backup', {
- *   onProgress: (p) => {
- *     process.stdout.write(`\r${p.percentage}% | ${formatBytes(p.speed)}/s | ETA: ${p.eta}s`)
- *   }
- * })
- * ```
  */
 export async function copyVolume(
   sourceVolume: string,
   targetVolume: string,
   options: VolumeCopyOptions = {}
 ): Promise<void> {
-  // rsyncイメージを使用（より高速で進捗表示可能）
   try {
     await copyVolumeWithRsync(sourceVolume, targetVolume, options)
   } catch (error) {
@@ -371,18 +338,6 @@ export async function copyVolume(
  * @param volumePairs - コピーするボリュームのペア配列
  * @param options - コピーオプション
  * @returns コピー結果のPromise
- *
- * @example
- * ```typescript
- * await copyVolumesParallel([
- *   { source: 'db-data', target: 'db-data-wt1' },
- *   { source: 'redis-data', target: 'redis-data-wt1' },
- *   { source: 'uploads', target: 'uploads-wt1' }
- * ], {
- *   parallelWorkers: 2,
- *   onProgress: (p) => console.log(`${p.sourceVolume}: ${p.percentage}%`)
- * })
- * ```
  */
 export async function copyVolumesParallel(
   volumePairs: Array<{ source: string; target: string }>,
@@ -390,7 +345,6 @@ export async function copyVolumesParallel(
 ): Promise<void> {
   const { parallelWorkers = 2, ...copyOptions } = options
 
-  // バッチに分割して並列実行
   for (let i = 0; i < volumePairs.length; i += parallelWorkers) {
     const batch = volumePairs.slice(i, i + parallelWorkers)
     await Promise.all(batch.map((pair) => copyVolume(pair.source, pair.target, copyOptions)))
@@ -399,9 +353,6 @@ export async function copyVolumesParallel(
 
 /**
  * バイト数を人間が読みやすい形式にフォーマット
- *
- * @param bytes - バイト数
- * @returns フォーマットされた文字列
  */
 export function formatBytes(bytes: number): string {
   if (bytes === 0) return "0 B"
@@ -415,9 +366,6 @@ export function formatBytes(bytes: number): string {
 
 /**
  * 秒数を人間が読みやすい形式にフォーマット
- *
- * @param seconds - 秒数
- * @returns フォーマットされた文字列
  */
 export function formatEta(seconds: number): string {
   if (seconds <= 0) return "--:--"
@@ -431,3 +379,6 @@ export function formatEta(seconds: number): string {
   }
   return `${minutes}:${String(secs).padStart(2, "0")}`
 }
+
+// Re-export FILE_ENCODING for backward compat
+export { FILE_ENCODING }

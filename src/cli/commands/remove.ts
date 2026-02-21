@@ -9,21 +9,13 @@ import * as path from "node:path"
 import { Command } from "commander"
 import { EXIT_CODES } from "../../constants/index.js"
 import { loadConfig } from "../../core/config/loader.js"
-// Core modules
 import { getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { getWorktreePath, listWorktrees, removeWorktree } from "../../core/git/worktree.js"
-import { getErrorMessage } from "../../utils/error.js"
+import { CLIError, getErrorMessage } from "../../utils/error.js"
+import { executeLifecycleCommand } from "../../utils/exec.js"
 
 /**
  * removeコマンドを作成
- *
- * @returns Commander.js のCommandオブジェクト
- *
- * @example
- * ```typescript
- * const program = new Command()
- * program.addCommand(removeCommand())
- * ```
  */
 export function removeCommand(): Command {
   return new Command("remove")
@@ -34,6 +26,10 @@ export function removeCommand(): Command {
       try {
         await executeRemoveCommand(branch, options)
       } catch (error) {
+        if (error instanceof CLIError) {
+          console.error(`Error: ${error.message}`)
+          process.exit(error.exitCode)
+        }
         console.error(`Error: ${getErrorMessage(error)}`)
         process.exit(EXIT_CODES.GENERAL_ERROR)
       }
@@ -42,16 +38,11 @@ export function removeCommand(): Command {
 
 /**
  * removeコマンドのメイン実行ロジック
- *
- * @param branch - ブランチ名
- * @param options - コマンドオプション
- * @throws {Error} 実行に失敗した場合
  */
 async function executeRemoveCommand(branch: string, options: { force?: boolean }): Promise<void> {
   // Git リポジトリチェック
   if (!isGitRepository()) {
-    console.error("Error: Not in a git repository")
-    process.exit(EXIT_CODES.NOT_GIT_REPOSITORY)
+    throw new CLIError("Not in a git repository", EXIT_CODES.NOT_GIT_REPOSITORY)
   }
 
   const gitRoot = getGitRoot()
@@ -66,13 +57,12 @@ async function executeRemoveCommand(branch: string, options: { force?: boolean }
     for (const wt of worktrees) {
       console.log(`  ${wt.branch}: ${wt.path}`)
     }
-    process.exit(EXIT_CODES.GENERAL_ERROR)
+    throw new CLIError(`No worktree found for branch '${branch}'`, EXIT_CODES.GENERAL_ERROR)
   }
 
   // メインリポジトリの削除を防止
   if (worktreePath === gitRoot) {
-    console.error("Error: Cannot remove the main repository worktree")
-    process.exit(EXIT_CODES.GENERAL_ERROR)
+    throw new CLIError("Cannot remove the main repository worktree", EXIT_CODES.GENERAL_ERROR)
   }
 
   console.log(`🗑️  Removing worktree for branch: ${branch}`)
@@ -82,8 +72,19 @@ async function executeRemoveCommand(branch: string, options: { force?: boolean }
     console.log("⚠️  Force removal enabled")
   }
 
-  // end_commandの実行（worktree削除前）
   const config = loadConfig(gitRoot)
+
+  // Docker Compose teardown（end_command がない場合 && compose ファイルが worktree に存在）
+  if (!config.end_command) {
+    const worktreeComposePath = path.resolve(worktreePath, config.docker_compose_file)
+    if (existsSync(worktreeComposePath)) {
+      console.log("")
+      console.log("🐳 Stopping Docker Compose services...")
+      await runDockerComposeDown(worktreePath)
+    }
+  }
+
+  // end_commandの実行（worktree削除前）
   if (config.end_command) {
     console.log("")
     console.log(`🛑 Running end command: ${config.end_command}`)
@@ -112,22 +113,32 @@ async function executeRemoveCommand(branch: string, options: { force?: boolean }
 }
 
 /**
- * end_commandを実行
- *
- * @param command - 実行するコマンド（スクリプトパス）
- * @param worktreePath - worktreeのパス（作業ディレクトリ）
+ * worktreeディレクトリで docker compose down を実行
+ * Docker が利用できない場合は警告のみ（削除処理は継続）
  */
-async function executeEndCommand(command: string, worktreePath: string): Promise<void> {
+async function runDockerComposeDown(worktreePath: string): Promise<void> {
   try {
-    // コマンドがスクリプトファイルの場合、worktree内のパスを使用
-    const commandPath = path.resolve(worktreePath, command)
-    const actualCommand = existsSync(commandPath) ? commandPath : command
-
-    execSync(actualCommand, {
+    execSync("docker compose down", {
       cwd: worktreePath,
       stdio: "inherit",
       shell: "/bin/sh",
     })
+    console.log("  ✅ Docker Compose services stopped")
+  } catch (error) {
+    console.log(`  ⚠️  Docker Compose down skipped: ${getErrorMessage(error)}`)
+    console.log("  (Continuing with worktree removal)")
+  }
+}
+
+/**
+ * end_commandを実行
+ */
+async function executeEndCommand(command: string, worktreePath: string): Promise<void> {
+  try {
+    const commandPath = path.resolve(worktreePath, command)
+    const actualCommand = existsSync(commandPath) ? commandPath : command
+
+    executeLifecycleCommand(actualCommand, worktreePath)
     console.log("  ✅ End command completed successfully")
   } catch (error) {
     console.log(`  ⚠️  End command failed: ${getErrorMessage(error)}`)

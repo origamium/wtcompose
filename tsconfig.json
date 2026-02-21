@@ -16,5 +16,14 @@
     "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/disabled", "src/**/*-broken.ts", "src/**/*-old.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "src/disabled",
+    "src/**/*-broken.ts",
+    "src/**/*-old.ts",
+    "src/**/*.test.ts",
+    "src/test/**",
+    "e2e/**"
+  ]
 }

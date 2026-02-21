@@ -9,51 +9,46 @@ import fs from "fs-extra"
 import { BACKUP_EXTENSION, FILE_ENCODING } from "../../constants/index.js"
 import type { FileOperationOptions } from "../../types/index.js"
 
+// =============================================================================
+// 統合行型（順序保持のため）
+// =============================================================================
+
 /**
- * 環境変数エントリ
+ * .env ファイルの1行を表す型
+ * type === 'entry' は KEY=VALUE 行、type === 'other' はコメント・空行
+ */
+type EnvLine =
+  | { type: "entry"; key: string; value: string; comment?: string }
+  | { type: "other"; content: string }
+
+/**
+ * 環境変数エントリ（後方互換性のため維持）
  */
 interface EnvEntry {
-  /** 変数名 */
   key: string
-  /** 値 */
   value: string
-  /** コメント（空の場合は undefined） */
   comment?: string
-  /** 元の行（コメント行の場合） */
-  originalLine?: string
 }
 
 /**
  * 環境変数ファイルの解析結果
+ * lines で元のファイルの行順序を保持
  */
 interface ParsedEnvFile {
-  /** 環境変数エントリ */
+  /** 行の配列（順序保持） */
+  lines: EnvLine[]
+  /** エントリ一覧（便利アクセス用） */
   entries: EnvEntry[]
-  /** コメント行や空行 */
-  otherLines: string[]
   /** 元のファイル内容（バックアップ用） */
   originalContent: string
 }
 
+// =============================================================================
+// パース
+// =============================================================================
+
 /**
  * 環境変数ファイルを読み込んで解析
- *
- * @param filePath - .envファイルのパス
- * @param options - ファイル操作オプション
- * @returns 解析結果オブジェクト
- * @throws {Error} ファイルの読み込みに失敗した場合
- *
- * @example
- * ```typescript
- * try {
- *   const parsed = parseEnvFile('./.env')
- *   parsed.entries.forEach(entry => {
- *     console.log(`${entry.key}=${entry.value}`)
- *   })
- * } catch (error) {
- *   console.error('Failed to parse .env file:', error.message)
- * }
- * ```
  */
 export function parseEnvFile(filePath: string, options?: FileOperationOptions): ParsedEnvFile {
   try {
@@ -76,30 +71,20 @@ export function parseEnvFile(filePath: string, options?: FileOperationOptions): 
 }
 
 /**
- * 環境変数ファイルの内容を解析
- *
- * @param content - .envファイルの内容
- * @returns 解析結果オブジェクト
- *
- * @example
- * ```typescript
- * const content = "APP_PORT=3000\n# Database config\nDB_PORT=5432"
- * const parsed = parseEnvContent(content)
- * console.log(parsed.entries.length) // 2
- * ```
+ * 環境変数ファイルの内容を解析（行順序を保持）
  */
 export function parseEnvContent(content: string): ParsedEnvFile {
   const lines = content.split("\n")
+  const parsedLines: EnvLine[] = []
   const entries: EnvEntry[] = []
-  const otherLines: string[] = []
 
-  lines.forEach((line) => {
+  for (const line of lines) {
     const trimmedLine = line.trim()
 
     // 空行またはコメント行
     if (!trimmedLine || trimmedLine.startsWith("#")) {
-      otherLines.push(line)
-      return
+      parsedLines.push({ type: "other", content: line })
+      continue
     }
 
     // KEY=VALUE形式の解析
@@ -107,8 +92,8 @@ export function parseEnvContent(content: string): ParsedEnvFile {
     if (match) {
       const [, key, rawValue] = match
 
-      // 値の前後の引用符を除去
       let value = rawValue
+      // 値の前後の引用符を除去
       if (
         (value.startsWith('"') && value.endsWith('"')) ||
         (value.startsWith("'") && value.endsWith("'"))
@@ -121,7 +106,6 @@ export function parseEnvContent(content: string): ParsedEnvFile {
       const commentMatch = rawValue.match(/^[^#]*#\s*(.+)$/)
       if (commentMatch) {
         comment = commentMatch[1].trim()
-        // コメント部分を除去して値を再取得
         value = rawValue.replace(/#.*$/, "").trim()
         if (
           (value.startsWith('"') && value.endsWith('"')) ||
@@ -131,80 +115,55 @@ export function parseEnvContent(content: string): ParsedEnvFile {
         }
       }
 
-      entries.push({ key, value, comment })
+      const entry: EnvEntry = { key, value, comment }
+      parsedLines.push({ type: "entry", key, value, comment })
+      entries.push(entry)
     } else {
       // 解析できない行はそのまま保持
-      otherLines.push(line)
+      parsedLines.push({ type: "other", content: line })
     }
-  })
+  }
 
   return {
+    lines: parsedLines,
     entries,
-    otherLines,
     originalContent: content,
   }
 }
 
+// =============================================================================
+// シリアライズ（行順序を保持）
+// =============================================================================
+
 /**
  * 環境変数エントリを.env形式の文字列に変換
- *
- * @param parsed - 解析済み環境変数ファイル
- * @returns .env形式の文字列
- *
- * @example
- * ```typescript
- * const parsed = parseEnvFile('./.env')
- * const content = serializeEnvFile(parsed)
- * fs.writeFileSync('./.env.new', content)
- * ```
+ * 元のファイルの行順序（コメント・空行含む）を保持する
  */
 export function serializeEnvFile(parsed: ParsedEnvFile): string {
-  const lines: string[] = []
+  const outputLines: string[] = []
 
-  // コメント行や空行を最初に追加（ヘッダーコメント等）
-  const headerLines = parsed.otherLines.filter((_, index) => {
-    // 最初の環境変数の前の行まで
-    return index < parsed.entries.length
-  })
-  lines.push(...headerLines)
-
-  // 環境変数エントリを追加
-  parsed.entries.forEach((entry) => {
-    let line = `${entry.key}=${entry.value}`
-    if (entry.comment) {
-      line += ` # ${entry.comment}`
+  for (const line of parsed.lines) {
+    if (line.type === "other") {
+      outputLines.push(line.content)
+    } else {
+      // type === 'entry'
+      let serialized = `${line.key}=${line.value}`
+      if (line.comment) {
+        serialized += ` # ${line.comment}`
+      }
+      outputLines.push(serialized)
     }
-    lines.push(line)
-  })
+  }
 
-  // 残りのコメント行（フッター）
-  const footerLines = parsed.otherLines.filter((_, index) => {
-    return index >= parsed.entries.length
-  })
-  lines.push(...footerLines)
-
-  return lines.join("\n")
+  return outputLines.join("\n")
 }
+
+// =============================================================================
+// 書き込み
+// =============================================================================
 
 /**
  * 環境変数ファイルに設定を書き込み
- *
- * @param filePath - 出力先ファイルパス
- * @param parsed - 書き込む環境変数データ
- * @param options - ファイル操作オプション
- * @throws {Error} ファイルの書き込みに失敗した場合
- *
- * @example
- * ```typescript
- * const parsed = parseEnvFile('./.env')
- * // 値を調整
- * parsed.entries.forEach(entry => {
- *   if (entry.key === 'APP_PORT') {
- *     entry.value = '4000'
- *   }
- * })
- * writeEnvFile('./.env.new', parsed)
- * ```
  */
 export function writeEnvFile(
   filePath: string,
@@ -221,7 +180,6 @@ export function writeEnvFile(
 
     const content = serializeEnvFile(parsed)
 
-    // ディレクトリが存在しない場合は作成
     const dir = path.dirname(filePath)
     if (!existsSync(dir)) {
       fs.mkdirpSync(dir)
@@ -238,26 +196,15 @@ export function writeEnvFile(
   }
 }
 
+// =============================================================================
+// 調整・コピー
+// =============================================================================
+
 /**
  * 環境変数ファイルをコピーして値を調整
+ * null の削除は Set で管理し、__DELETE__ センチネル値の衝突を防ぐ
  *
- * @param sourcePath - コピー元ファイルパス
- * @param targetPath - コピー先ファイルパス
- * @param adjustments - 調整ルール（key -> value または adjustment function）
- * @param options - ファイル操作オプション
  * @returns 調整された環境変数の数
- *
- * @example
- * ```typescript
- * const adjustments = {
- *   APP_PORT: (value: string) => (parseInt(value) + 1000).toString(),
- *   DB_HOST: 'localhost-dev',
- *   DEBUG_MODE: null // 削除
- * }
- *
- * const adjustedCount = copyAndAdjustEnvFile('./.env', './.env.new', adjustments)
- * console.log(`Adjusted ${adjustedCount} variables`)
- * ```
  */
 export function copyAndAdjustEnvFile(
   sourcePath: string,
@@ -268,62 +215,70 @@ export function copyAndAdjustEnvFile(
   const parsed = parseEnvFile(sourcePath, options)
   let adjustedCount = 0
 
+  // 削除対象のキーを Set で管理（センチネル値衝突を防ぐ）
+  const keysToDelete = new Set<string>()
+
   // 既存の環境変数を調整
-  parsed.entries.forEach((entry) => {
-    const adjustment = adjustments[entry.key]
+  for (const line of parsed.lines) {
+    if (line.type !== "entry") continue
+
+    const adjustment = adjustments[line.key]
 
     if (adjustment === null) {
-      // null の場合は削除（フィルタリングは後で）
-      entry.value = "__DELETE__"
+      keysToDelete.add(line.key)
       adjustedCount++
     } else if (typeof adjustment === "string") {
-      entry.value = adjustment
+      line.value = adjustment
+      // entries 配列も同期
+      const entry = parsed.entries.find((e) => e.key === line.key)
+      if (entry) entry.value = adjustment
       adjustedCount++
     } else if (typeof adjustment === "number") {
-      // 数値の場合は元の値に加算（ポート番号等）
-      const originalValue = parseInt(entry.value, 10)
+      const originalValue = parseInt(line.value, 10)
       if (!Number.isNaN(originalValue)) {
-        entry.value = (originalValue + adjustment).toString()
+        const newValue = (originalValue + adjustment).toString()
+        line.value = newValue
+        const entry = parsed.entries.find((e) => e.key === line.key)
+        if (entry) entry.value = newValue
         adjustedCount++
       }
     } else if (typeof adjustment === "function") {
-      entry.value = adjustment(entry.value)
+      const newValue = adjustment(line.value)
+      line.value = newValue
+      const entry = parsed.entries.find((e) => e.key === line.key)
+      if (entry) entry.value = newValue
       adjustedCount++
     }
-  })
+  }
 
-  // 削除マークされた項目を除去
-  parsed.entries = parsed.entries.filter((entry) => entry.value !== "__DELETE__")
+  // 削除マークされた行を除去（lines と entries 両方から）
+  parsed.lines = parsed.lines.filter(
+    (line) => !(line.type === "entry" && keysToDelete.has(line.key))
+  )
+  parsed.entries = parsed.entries.filter((entry) => !keysToDelete.has(entry.key))
 
-  // 新しい環境変数を追加
-  Object.entries(adjustments).forEach(([key, value]) => {
-    const existingEntry = parsed.entries.find((entry) => entry.key === key)
-    if (!existingEntry && value !== null && typeof value !== "function") {
-      parsed.entries.push({
-        key,
-        value: typeof value === "number" ? value.toString() : (value as string),
-        comment: "Added by WTurbo",
-      })
+  // 新しい環境変数を追加（既存にない場合のみ）
+  const existingKeys = new Set(parsed.entries.map((e) => e.key))
+  for (const [key, value] of Object.entries(adjustments)) {
+    if (!existingKeys.has(key) && value !== null && typeof value !== "function") {
+      const strValue = typeof value === "number" ? value.toString() : (value as string)
+      const newEntry: EnvEntry = { key, value: strValue, comment: "Added by WTurbo" }
+      parsed.entries.push(newEntry)
+      parsed.lines.push({ type: "entry", key, value: strValue, comment: "Added by WTurbo" })
       adjustedCount++
     }
-  })
+  }
 
   writeEnvFile(targetPath, parsed, options)
   return adjustedCount
 }
 
+// =============================================================================
+// バックアップ
+// =============================================================================
+
 /**
  * 環境変数ファイルをバックアップ
- *
- * @param filePath - バックアップするファイルパス
- * @param backupSuffix - バックアップファイルの接尾辞（デフォルト: BACKUP_EXTENSION）
- * @returns バックアップファイルのパス
- *
- * @example
- * ```typescript
- * const backupPath = backupEnvFile('./.env')
- * console.log(`Backup created: ${backupPath}`)
- * ```
  */
 export function backupEnvFile(filePath: string, backupSuffix?: string): string {
   const suffix = backupSuffix || BACKUP_EXTENSION
@@ -339,20 +294,6 @@ export function backupEnvFile(filePath: string, backupSuffix?: string): string {
 
 /**
  * 環境変数ファイルからバックアップを復元
- *
- * @param filePath - 復元先ファイルパス
- * @param backupSuffix - バックアップファイルの接尾辞（デフォルト: BACKUP_EXTENSION）
- * @throws {Error} バックアップファイルが存在しない場合
- *
- * @example
- * ```typescript
- * try {
- *   restoreEnvFile('./.env')
- *   console.log('Environment file restored from backup')
- * } catch (error) {
- *   console.error('No backup file found')
- * }
- * ```
  */
 export function restoreEnvFile(filePath: string, backupSuffix?: string): void {
   const suffix = backupSuffix || BACKUP_EXTENSION

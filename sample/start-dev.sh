@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/sh
 # Start development environment script
 # This script runs after worktree creation
 

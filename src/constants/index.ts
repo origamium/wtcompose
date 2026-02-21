@@ -3,6 +3,12 @@
  * WTurbo CLI で使用される定数値を統合管理
  */
 
+import { createRequire } from "node:module"
+
+const _require = createRequire(import.meta.url)
+// biome-ignore lint/suspicious/noExplicitAny: package.json is a plain object
+const _pkg = _require("../../package.json") as any
+
 // =============================================================================
 // Application Constants
 // =============================================================================
@@ -10,8 +16,8 @@
 /** アプリケーション名 */
 export const APP_NAME = "wturbo"
 
-/** アプリケーションバージョン */
-export const APP_VERSION = "1.0.0"
+/** アプリケーションバージョン（package.json から動的取得） */
+export const APP_VERSION: string = _pkg.version ?? "0.0.0"
 
 /** アプリケーション説明 */
 export const APP_DESCRIPTION = "Git worktree management with Docker Compose environment isolation"
@@ -79,23 +85,6 @@ export const PORT_RANGE = {
 } as const
 
 // =============================================================================
-// Git Constants
-// =============================================================================
-
-/** Gitコマンドのフォーマット */
-export const GIT_COMMANDS = {
-  IS_REPOSITORY: "git rev-parse --is-inside-work-tree",
-  GET_ROOT: "git rev-parse --show-toplevel",
-  CURRENT_BRANCH: "git branch --show-current",
-  BRANCH_EXISTS: "git show-ref --verify --quiet refs/heads/{branchName}",
-  LIST_WORKTREES: "git worktree list --porcelain",
-  CREATE_WORKTREE: "git worktree add {path} -b {branch}",
-  CREATE_WORKTREE_EXISTING: "git worktree add {path} {branch}",
-  REMOVE_WORKTREE: "git worktree remove {path}",
-  REMOVE_WORKTREE_FORCE: "git worktree remove --force {path}",
-} as const
-
-// =============================================================================
 // File System Constants
 // =============================================================================
 
@@ -134,10 +123,13 @@ export const LOG_LEVELS = {
 // Environment Variable Constants
 // =============================================================================
 
-/** 環境変数名の正規表現パターン */
+/**
+ * 環境変数名の正規表現パターン（POSIX準拠）
+ * 英字またはアンダースコアで始まり、英数字とアンダースコアのみ使用可
+ */
 export const ENV_VAR_PATTERNS = {
-  VALID_NAME: /^[A-Z][A-Z0-9_]*$/,
-  INVALID_CHARS: /[^A-Z0-9_]/g,
+  VALID_NAME: /^[a-zA-Z_][a-zA-Z0-9_]*$/,
+  INVALID_CHARS: /[^a-zA-Z0-9_]/g,
   STARTS_WITH_NUMBER: /^([0-9])/,
   MULTIPLE_UNDERSCORES: /_+/g,
   LEADING_TRAILING_UNDERSCORES: /^_+|_+$/g,

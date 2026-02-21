@@ -1,4 +1,4 @@
-#!/bin/zsh
+#!/bin/sh
 # Stop development environment script
 # This script runs before worktree removal
 

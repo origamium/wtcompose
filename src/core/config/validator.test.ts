@@ -72,7 +72,7 @@ describe("Config Validator (Refactored)", () => {
       )
     })
 
-    it("should throw error when docker_compose_file does not exist", () => {
+    it("should warn (not throw) when docker_compose_file does not exist", () => {
       vi.mocked(existsSync).mockImplementation((path) => {
         return !path.toString().includes("docker-compose.yaml")
       })
@@ -85,9 +85,8 @@ describe("Config Validator (Refactored)", () => {
         env: { file: ["./.env"], adjust: {} },
       }
 
-      expect(() => validateConfig(invalidConfig, configFile)).toThrow(
-        "docker_compose_file not found"
-      )
+      // docker_compose_file not found is now a warning, not an error
+      expect(() => validateConfig(invalidConfig, configFile)).not.toThrow()
     })
   })
 
@@ -97,10 +96,11 @@ describe("Config Validator (Refactored)", () => {
       expect(validateEnvVarName("DATABASE_URL")).toBe(true)
       expect(validateEnvVarName("NODE_ENV")).toBe(true)
       expect(validateEnvVarName("API_KEY_SECRET")).toBe(true)
+      expect(validateEnvVarName("app_port")).toBe(true) // lowercase is valid (POSIX)
+      expect(validateEnvVarName("_private_var")).toBe(true) // leading underscore
     })
 
     it("should reject invalid environment variable names", () => {
-      expect(validateEnvVarName("app_port")).toBe(false) // lowercase
       expect(validateEnvVarName("123_VAR")).toBe(false) // starts with number
       expect(validateEnvVarName("APP-PORT")).toBe(false) // hyphen
       expect(validateEnvVarName("APP.PORT")).toBe(false) // dot

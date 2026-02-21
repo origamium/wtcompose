@@ -260,9 +260,7 @@ export function isWTurboContainer(container: ContainerInfo): boolean {
   }
 
   // 環境変数でWTurboプロジェクトのコンテナか判定
-  const wturboEnvVars = Object.keys(process.env).filter((key) =>
-    key.startsWith(WTURBO_PREFIX)
-  )
+  const wturboEnvVars = Object.keys(process.env).filter((key) => key.startsWith(WTURBO_PREFIX))
 
   return wturboEnvVars.some((envVar) => {
     const value = process.env[envVar]

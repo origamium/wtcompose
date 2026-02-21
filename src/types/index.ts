@@ -116,8 +116,8 @@ export interface ComposeService {
  * Docker Compose設定
  */
 export interface ComposeConfig {
-  /** Composeファイルのバージョン */
-  version: string
+  /** Composeファイルのバージョン（Docker Compose v2 では省略可） */
+  version?: string
   /** サービス定義 */
   services: Record<string, ComposeService>
   /** ボリューム定義（Docker Composeは任意の構造を許容） */
@@ -189,14 +189,4 @@ export interface ExecOptions {
   env?: Record<string, string>
   /** タイムアウト（ミリ秒） */
   timeout?: number
-}
-
-/**
- * エラー情報
- */
-export interface WTurboError extends Error {
-  /** エラーコード */
-  code: string
-  /** 詳細情報 */
-  details?: Record<string, unknown>
 }

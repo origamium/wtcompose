@@ -14,6 +14,14 @@ copy_files:
   - .claude
   - .serena
 
+# Files and directories to symlink (not copy) into the worktree
+# The symlink points back to the original in the source repo root
+# Ideal for large dirs (node_modules, .cache) to avoid duplication
+# If a path appears in both copy_files and link_files, link_files takes priority
+link_files:
+  # - node_modules
+  # - .cache
+
 # Command to run after worktree creation (install dependencies, start services)
 start_command: ./start-dev.sh
 

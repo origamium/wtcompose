@@ -35,6 +35,7 @@ export const DEFAULT_CONFIG = {
   base_branch: "main",
   docker_compose_file: "./docker-compose.yml",
   copy_files: [] as string[],
+  link_files: [] as string[],
   start_command: undefined as string | undefined,
   end_command: undefined as string | undefined,
   env: {

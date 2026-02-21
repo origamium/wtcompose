@@ -99,6 +99,7 @@ export function mergeWithDefaults(partial: Partial<WTurboConfig>): WTurboConfig 
     base_branch: partial.base_branch || DEFAULT_CONFIG.base_branch,
     docker_compose_file: partial.docker_compose_file || DEFAULT_CONFIG.docker_compose_file,
     copy_files: partial.copy_files || [...DEFAULT_CONFIG.copy_files],
+    link_files: partial.link_files || [...DEFAULT_CONFIG.link_files],
     start_command: partial.start_command ?? DEFAULT_CONFIG.start_command,
     end_command: partial.end_command ?? DEFAULT_CONFIG.end_command,
     env: {
@@ -140,6 +141,13 @@ copy_files:
   # - .env
   # - .claude
   # - .serena
+
+# Files and directories to symlink (not copy) when creating a worktree
+# Symlinks share the single source file/dir across all worktrees (ideal for large dirs)
+# If a path appears in both copy_files and link_files, link_files takes priority
+link_files:
+  # - node_modules
+  # - .cache
 
 # Command to run after worktree creation (e.g., install dependencies)
 # start_command: ./start-dev.sh

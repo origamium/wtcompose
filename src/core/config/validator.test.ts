@@ -31,6 +31,7 @@ describe("Config Validator (Refactored)", () => {
         base_branch: "main",
         docker_compose_file: "./docker-compose.yaml",
         copy_files: [".env", ".claude"],
+        link_files: ["node_modules", ".cache"],
         env: {
           file: ["./env/prod.env", "./env/dev.env"],
           adjust: {
@@ -42,6 +43,20 @@ describe("Config Validator (Refactored)", () => {
       }
 
       expect(() => validateConfig(validConfig, configFile)).not.toThrow()
+    })
+
+    it("should throw error when link_files contains a non-string entry", () => {
+      const invalidConfig = {
+        base_branch: "main",
+        docker_compose_file: "./docker-compose.yaml",
+        copy_files: [],
+        link_files: [42],
+        env: { file: ["./.env"], adjust: {} },
+      } as unknown as WTurboConfig
+
+      expect(() => validateConfig(invalidConfig, configFile)).toThrow(
+        "link_files[0] must be a string"
+      )
     })
 
     it("should throw error when base_branch is missing", () => {

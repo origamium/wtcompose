@@ -41,6 +41,8 @@ describe("Config Loader (Refactored)", () => {
 
       expect(config.base_branch).toBe("main")
       expect(config.docker_compose_file).toBe("./docker-compose.yml")
+      expect(config.copy_files).toEqual([])
+      expect(config.link_files).toEqual([])
       expect(config.env.file).toEqual(["./.env"])
     })
 
@@ -59,6 +61,7 @@ env:
       vi.mocked(parse).mockReturnValue({
         base_branch: "develop",
         docker_compose_file: "./docker-compose.dev.yml",
+        link_files: ["node_modules"],
         env: {
           file: ["./.env.custom"],
           adjust: { APP_PORT: 1000 },
@@ -69,8 +72,19 @@ env:
 
       expect(config.base_branch).toBe("develop")
       expect(config.docker_compose_file).toBe("./docker-compose.dev.yml")
+      expect(config.link_files).toEqual(["node_modules"])
       expect(config.env.file).toEqual(["./.env.custom"])
       expect(config.env.adjust.APP_PORT).toBe(1000)
+    })
+
+    it("should default link_files to empty array when not specified", () => {
+      vi.mocked(existsSync).mockReturnValue(true)
+      vi.mocked(fs.readFileSync).mockReturnValue("base_branch: main")
+      vi.mocked(parse).mockReturnValue({ base_branch: "main" })
+
+      const config = loadConfig(testRepoPath)
+
+      expect(config.link_files).toEqual([])
     })
 
     it("should merge partial config with defaults", () => {

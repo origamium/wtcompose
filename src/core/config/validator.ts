@@ -89,6 +89,27 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
     }
   }
 
+  // link_filesの検証
+  if (config.link_files !== undefined) {
+    if (!Array.isArray(config.link_files)) {
+      errors.push({
+        message: "link_files must be an array",
+        field: "link_files",
+        severity: "error",
+      })
+    } else {
+      config.link_files.forEach((linkFile, index) => {
+        if (typeof linkFile !== "string") {
+          errors.push({
+            message: `link_files[${index}] must be a string`,
+            field: `link_files[${index}]`,
+            severity: "error",
+          })
+        }
+      })
+    }
+  }
+
   // start_commandの検証
   if (config.start_command !== undefined && typeof config.start_command !== "string") {
     errors.push({

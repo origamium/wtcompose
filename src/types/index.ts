@@ -27,6 +27,8 @@ export interface WTurboConfig {
   docker_compose_file: string
   /** worktree作成時にコピーするファイル・ディレクトリ（gitignoreされているものも含む） */
   copy_files: string[]
+  /** worktree作成時にシンボリックリンクを張るファイル・ディレクトリ（copy_filesより優先） */
+  link_files: string[]
   /** worktree作成後に実行するコマンド（スクリプトパス） */
   start_command?: string
   /** worktree削除時に実行するコマンド（スクリプトパス） */

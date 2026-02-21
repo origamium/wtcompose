@@ -217,7 +217,20 @@ export function cleanup(): void {
 /**
  * Create a wturbo.yaml config file in the test repository
  */
-export function createWTurboConfig(repoPath: string, config?: Record<string, unknown>): void {
+type PartialWTurboTestConfig = {
+  base_branch?: string
+  docker_compose_file?: string
+  env?: {
+    file?: string[]
+    adjust?: {
+      APP_PORT?: number | null
+      DB_PORT?: number | null
+      API_URL?: string
+    }
+  }
+}
+
+export function createWTurboConfig(repoPath: string, config?: PartialWTurboTestConfig): void {
   const defaultConfig = {
     base_branch: "main",
     docker_compose_file: "./docker-compose.yaml",

@@ -83,8 +83,8 @@ export function createTestRepo(projectName: string, testName: string): TestRepo 
   // Copy project template
   fs.copySync(templatePath, repoPath)
 
-  // Initialize git repository
-  execSync("git init", { cwd: repoPath, stdio: "pipe" })
+  // Initialize git repository with 'main' as the default branch
+  execSync("git init -b main", { cwd: repoPath, stdio: "pipe" })
   execSync('git config user.name "E2E Test"', { cwd: repoPath, stdio: "pipe" })
   execSync('git config user.email "e2e@test.local"', { cwd: repoPath, stdio: "pipe" })
 

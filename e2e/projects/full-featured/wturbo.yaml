@@ -17,11 +17,9 @@ copy_files:
 start_command: ./scripts/start.sh
 end_command: ./scripts/stop.sh
 
-# Environment configuration
+# Environment configuration (no env.file to avoid overwriting copy_files)
 env:
-  file:
-    - "./.env"
-    - "./.env.local"
+  file: []
   adjust:
     APP_PORT: 1000
     DB_PORT: 1000

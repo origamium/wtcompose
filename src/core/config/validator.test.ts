@@ -62,8 +62,10 @@ describe("Config Validator (Refactored)", () => {
     it("should throw error when base_branch is missing", () => {
       const invalidConfig = {
         docker_compose_file: "./docker-compose.yaml",
+        copy_files: [],
+        link_files: [],
         env: { file: ["./.env"], adjust: {} },
-      } as WTurboConfig
+      } as unknown as WTurboConfig
 
       expect(() => validateConfig(invalidConfig, configFile)).toThrow(
         "base_branch must be a non-empty string"
@@ -79,6 +81,7 @@ describe("Config Validator (Refactored)", () => {
         base_branch: "main",
         docker_compose_file: "./docker-compose.yaml",
         copy_files: [],
+        link_files: [],
         env: { file: ["./.env"], adjust: {} },
       }
 

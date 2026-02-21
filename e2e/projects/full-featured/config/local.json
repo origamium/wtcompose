@@ -1,0 +1,6 @@
+{
+  "app": {
+    "name": "full-featured-test",
+    "environment": "local"
+  }
+}

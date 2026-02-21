@@ -13,6 +13,8 @@ import { loadConfig } from "../../core/config/loader.js"
 // Core modules
 import { branchExists, getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { createWorktree, getWorktreePath, listWorktrees } from "../../core/git/worktree.js"
+import { copyAndAdjustEnvFile } from "../../core/environment/processor.js"
+import type { WTurboConfig } from "../../types/index.js"
 import { getErrorMessage } from "../../utils/error.js"
 
 /**
@@ -81,14 +83,24 @@ async function executeCreateCommand(
 
   // ブランチが既に存在するかチェック
   const branchAlreadyExists = branchExists(branch)
-  if (branchAlreadyExists) {
+
+  // --no-create-branch が指定されたのに対象ブランチが存在しない場合はエラー
+  if (options.createBranch === false && !branchAlreadyExists) {
+    console.error(
+      `Error: Branch '${branch}' does not exist. Remove --no-create-branch to create it.`
+    )
+    process.exit(EXIT_CODES.GENERAL_ERROR)
+  }
+
+  const useExistingBranch = branchAlreadyExists || options.createBranch === false
+  if (useExistingBranch) {
     console.log(`ℹ️  Branch '${branch}' already exists, using existing branch`)
   } else {
     console.log(`✨ Creating new branch: ${branch}`)
   }
 
   // worktreeを作成（既存ブランチの場合は useExistingBranch オプションを使用）
-  createWorktree(branch, worktreePath, { useExistingBranch: branchAlreadyExists })
+  createWorktree(branch, worktreePath, { useExistingBranch })
 
   // 設定ファイルを読み込み、copy_files / link_files を処理
   const config = loadConfig(gitRoot)
@@ -107,6 +119,13 @@ async function executeCreateCommand(
     console.log("")
     console.log("🔗 Creating symlinks...")
     await linkConfiguredFiles(gitRoot, worktreePath, config.link_files)
+  }
+
+  // env.adjustの適用（env.fileに記載されたファイルにenv.adjustを適用してworktreeにコピー）
+  if (config.env.file.length > 0 && Object.keys(config.env.adjust).length > 0) {
+    console.log("")
+    console.log("🔧 Adjusting environment files...")
+    await applyEnvAdjustments(gitRoot, worktreePath, config)
   }
 
   // start_commandの実行
@@ -265,5 +284,36 @@ async function executeStartCommand(command: string, worktreePath: string): Promi
   } catch (error) {
     console.log(`  ⚠️  Start command failed: ${getErrorMessage(error)}`)
     console.log("  (Worktree was created, but start command had issues)")
+  }
+}
+
+/**
+ * env.fileに記載された環境変数ファイルをworktreeにコピーしenv.adjustを適用
+ *
+ * @param sourceRoot - コピー元ルートディレクトリ（gitルート）
+ * @param targetRoot - コピー先ルートディレクトリ（worktreeパス）
+ * @param config - WTurbo設定オブジェクト
+ */
+async function applyEnvAdjustments(
+  sourceRoot: string,
+  targetRoot: string,
+  config: WTurboConfig
+): Promise<void> {
+  for (const relativePath of config.env.file) {
+    const sourcePath = path.resolve(sourceRoot, relativePath)
+    const targetPath = path.resolve(targetRoot, relativePath)
+
+    if (!existsSync(sourcePath)) {
+      console.log(`  ⚠️  Skip (not found): ${relativePath}`)
+      continue
+    }
+
+    try {
+      await fs.ensureDir(path.dirname(targetPath))
+      const adjustedCount = copyAndAdjustEnvFile(sourcePath, targetPath, config.env.adjust)
+      console.log(`  ✅ Applied ${adjustedCount} adjustment(s): ${relativePath}`)
+    } catch (error) {
+      console.log(`  ❌ Failed to adjust ${relativePath}: ${getErrorMessage(error)}`)
+    }
   }
 }

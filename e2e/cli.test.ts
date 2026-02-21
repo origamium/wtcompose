@@ -1,5 +1,5 @@
 /**
- * @fileoverview Comprehensive E2E Tests for WTCompose CLI
+ * @fileoverview Comprehensive E2E Tests for WTurbo CLI
  * Tests all CLI commands against multiple test projects
  */
 

@@ -1,4 +1,4 @@
-# wtcompose
+# wturbo
 
 **複数ブランチの開発環境を一瞬で切り替える**
 
@@ -16,7 +16,7 @@ Git worktreeを使って、ブランチごとに独立した作業ディレク�
 ### 1. インストール
 
 ```bash
-npm install -g wtcompose
+npm install -g wturbo
 ```
 
 ### 2. 設定ファイルを作成

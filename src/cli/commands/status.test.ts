@@ -170,7 +170,7 @@ describe("Status Command (Refactored)", () => {
         },
         {
           id: "container2",
-          name: "wtcompose_api_1",
+          name: "wturbo_api_1",
           image: "node:16",
           status: "Up 1 hour",
           ports: ["0.0.0.0:8080->8080/tcp"],
@@ -180,7 +180,7 @@ describe("Status Command (Refactored)", () => {
       ]
 
       vi.mocked(dockerClientModule.getRunningContainers).mockReturnValue(mockContainers)
-      vi.mocked(dockerClientModule.isWTComposeContainer)
+      vi.mocked(dockerClientModule.isWTurboContainer)
         .mockReturnValueOnce(false)
         .mockReturnValueOnce(true)
 
@@ -189,7 +189,7 @@ describe("Status Command (Refactored)", () => {
       expect(consoleSpy).toHaveBeenCalledWith("🐳 Docker Environment Status\n")
       expect(consoleSpy).toHaveBeenCalledWith("📦 Running Containers: 2")
       expect(consoleSpy).toHaveBeenCalledWith("📦 app_web_1")
-      expect(consoleSpy).toHaveBeenCalledWith("🌿 wtcompose_api_1")
+      expect(consoleSpy).toHaveBeenCalledWith("🌿 wturbo_api_1")
     })
 
     it("should show docker version information", async () => {

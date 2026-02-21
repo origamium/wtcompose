@@ -1,5 +1,5 @@
 -- =============================================================================
--- Initial Database Setup for WTCompose
+-- Initial Database Setup for WTurbo
 -- =============================================================================
 
 -- Create extension for UUID generation

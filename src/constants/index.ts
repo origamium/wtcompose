@@ -143,4 +143,4 @@ export const ENV_VAR_PATTERNS = {
 } as const
 
 /** WTurboプロジェクト識別用の環境変数プレフィックス */
-export const WTCOMPOSE_PREFIX = "WTCOMPOSE_" as const
+export const WTURBO_PREFIX = "WTURBO_" as const

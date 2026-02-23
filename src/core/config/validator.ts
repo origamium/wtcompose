@@ -39,22 +39,24 @@ export function validateConfig(config: WTurboConfig, configFile: string): void {
   }
 
   // docker_compose_fileの検証
-  // Docker Compose v2 では version フィールドは不要で compose ファイル自体も任意
-  // → 存在しない場合は warning のみ（error ではない）
-  if (!config.docker_compose_file || typeof config.docker_compose_file !== "string") {
-    errors.push({
-      message: "docker_compose_file must be a non-empty string",
-      field: "docker_compose_file",
-      severity: "error",
-    })
-  } else {
-    const composePath = path.resolve(configDir, config.docker_compose_file)
-    if (!existsSync(composePath)) {
+  // 空文字列・未設定の場合はDocker未使用と見なしてスキップ（エラーなし・警告なし）
+  // 非空文字列が設定されている場合のみ存在チェック（warning）
+  if (config.docker_compose_file) {
+    if (typeof config.docker_compose_file !== "string") {
       errors.push({
-        message: `docker_compose_file not found: ${config.docker_compose_file}`,
+        message: "docker_compose_file must be a string",
         field: "docker_compose_file",
-        severity: "warning",
+        severity: "error",
       })
+    } else {
+      const composePath = path.resolve(configDir, config.docker_compose_file)
+      if (!existsSync(composePath)) {
+        errors.push({
+          message: `docker_compose_file not found: ${config.docker_compose_file}`,
+          field: "docker_compose_file",
+          severity: "warning",
+        })
+      }
     }
   }
 

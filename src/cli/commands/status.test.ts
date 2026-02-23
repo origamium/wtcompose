@@ -6,6 +6,7 @@
 import type { Command } from "commander"
 import { existsSync } from "fs-extra"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import * as loaderModule from "../../core/config/loader.js"
 import * as dockerClientModule from "../../core/docker/client.js"
 import * as dockerComposeModule from "../../core/docker/compose.js"
 import * as repositoryModule from "../../core/git/repository.js"
@@ -13,6 +14,7 @@ import * as worktreeModule from "../../core/git/worktree.js"
 import { statusCommand } from "./status.js"
 
 // Mock dependencies
+vi.mock("../../core/config/loader.js")
 vi.mock("../../core/git/repository.js")
 vi.mock("../../core/git/worktree.js")
 vi.mock("../../core/docker/client.js")
@@ -31,6 +33,16 @@ describe("Status Command (Refactored)", () => {
     consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {})
     consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {})
     command = statusCommand()
+
+    // Default: Docker IS configured so existing Docker-probe tests keep working.
+    vi.mocked(repositoryModule.getGitRoot).mockReturnValue("/project")
+    vi.mocked(loaderModule.loadConfig).mockReturnValue({
+      base_branch: "main",
+      docker_compose_file: "./docker-compose.yml",
+      copy_files: [],
+      link_files: [],
+      env: { file: [], adjust: {} },
+    })
   })
 
   afterEach(() => {
@@ -155,6 +167,24 @@ describe("Status Command (Refactored)", () => {
       vi.mocked(worktreeModule.listWorktrees).mockReturnValue([])
       vi.mocked(dockerClientModule.getRunningContainers).mockReturnValue([])
       vi.mocked(dockerClientModule.getDockerVolumes).mockReturnValue([])
+    })
+
+    it("should skip Docker checks and show message when docker_compose_file is not configured", async () => {
+      vi.mocked(loaderModule.loadConfig).mockReturnValue({
+        base_branch: "main",
+        docker_compose_file: "",
+        copy_files: [],
+        link_files: [],
+        env: { file: [], adjust: {} },
+      })
+
+      await command.parseAsync([], { from: "user" })
+
+      expect(consoleSpy).toHaveBeenCalledWith("🐳 Docker Environment Status\n")
+      expect(consoleSpy).toHaveBeenCalledWith("⚙️  Docker checks skipped (not configured)")
+      expect(dockerClientModule.getRunningContainers).not.toHaveBeenCalled()
+      expect(dockerClientModule.getDockerVolumes).not.toHaveBeenCalled()
+      expect(dockerClientModule.getDockerInfo).not.toHaveBeenCalled()
     })
 
     it("should show running containers information", async () => {

@@ -72,6 +72,21 @@ describe("Config Validator (Refactored)", () => {
       )
     })
 
+    it("should not error or warn when docker_compose_file is empty string", () => {
+      const configNoDocker: WTurboConfig = {
+        base_branch: "main",
+        docker_compose_file: "",
+        copy_files: [],
+        link_files: [],
+        env: { file: [], adjust: {} },
+      }
+
+      const stderrSpy = vi.spyOn(process.stderr, "write").mockImplementation(() => true)
+      expect(() => validateConfig(configNoDocker, configFile)).not.toThrow()
+      expect(stderrSpy).not.toHaveBeenCalled()
+      stderrSpy.mockRestore()
+    })
+
     it("should warn (not throw) when docker_compose_file does not exist", () => {
       vi.mocked(existsSync).mockImplementation((path) => {
         return !path.toString().includes("docker-compose.yaml")

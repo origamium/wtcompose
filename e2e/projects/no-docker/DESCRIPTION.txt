@@ -1,0 +1,1 @@
+Project without docker_compose_file configured. Used to verify Docker checks are skipped gracefully.

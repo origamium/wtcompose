@@ -40,7 +40,7 @@ describe("Config Loader (Refactored)", () => {
       const config = loadConfig(testRepoPath)
 
       expect(config.base_branch).toBe("main")
-      expect(config.docker_compose_file).toBe("./docker-compose.yml")
+      expect(config.docker_compose_file).toBe("")
       expect(config.copy_files).toEqual([])
       expect(config.link_files).toEqual([])
       expect(config.env.file).toEqual(["./.env"])
@@ -99,7 +99,7 @@ env:
       const config = loadConfig(testRepoPath)
 
       expect(config.base_branch).toBe("develop")
-      expect(config.docker_compose_file).toBe("./docker-compose.yml") // default
+      expect(config.docker_compose_file).toBe("") // default: no Docker
       expect(config.env.file).toEqual(["./.env"]) // default
     })
   })

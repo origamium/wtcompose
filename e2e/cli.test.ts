@@ -591,6 +591,47 @@ describe("Status Command", () => {
 })
 
 // =============================================================================
+// STATUS COMMAND - NO DOCKER PROJECT
+// =============================================================================
+
+describe("Status Command - No Docker Project", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("no-docker", "status-no-docker")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  it("should show Docker checks skipped when docker_compose_file is not configured", () => {
+    const result = testRepo.runCLI("status")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Docker Environment Status")
+    expect(result.combined).toContain("Docker checks skipped (not configured)")
+  })
+
+  it("should still show Git worktree status when Docker is not configured", () => {
+    const result = testRepo.runCLI("status")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Git Worktrees Status")
+    expect(result.combined).toContain("main")
+  })
+
+  it("should show Docker checks skipped with --docker-only flag", () => {
+    const result = testRepo.runCLI("status --docker-only")
+
+    expect(result.exitCode).toBe(0)
+    expect(result.combined).toContain("Docker Environment Status")
+    expect(result.combined).toContain("Docker checks skipped (not configured)")
+    expect(result.combined).not.toContain("Git Worktrees Status")
+  })
+})
+
+// =============================================================================
 // FULL WORKFLOW TESTS
 // =============================================================================
 

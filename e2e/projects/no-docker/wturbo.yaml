@@ -1,0 +1,11 @@
+# No-Docker WTurbo Configuration
+# docker_compose_file is intentionally omitted (or set to empty) to verify
+# that Docker checks are skipped gracefully.
+
+base_branch: "main"
+
+copy_files: []
+
+env:
+  file: []
+  adjust: {}

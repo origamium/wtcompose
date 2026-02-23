@@ -8,6 +8,7 @@ import { existsSync } from "node:fs"
 import * as path from "node:path"
 import { Command } from "commander"
 import { ENV_FILE_NAMES, EXIT_CODES } from "../../constants/index.js"
+import { loadConfig } from "../../core/config/loader.js"
 import {
   getDockerInfo,
   getDockerVolumes,
@@ -65,13 +66,23 @@ async function executeStatusCommand(options: CommandOptions): Promise<void> {
     process.exit(EXIT_CODES.NOT_GIT_REPOSITORY)
   }
 
+  // docker_compose_file 設定を取得（設定読み込みエラーは非致命的 → Docker スキップ）
+  const gitRoot = getGitRoot()
+  let dockerComposeFile = ""
+  try {
+    const config = loadConfig(gitRoot)
+    dockerComposeFile = config.docker_compose_file
+  } catch {
+    // Config load error: treat Docker as unconfigured
+  }
+
   // Worktree 状態表示（--docker-only でない場合）
   if (!options.dockerOnly) {
     await showWorktreeStatus(!!options.all)
   }
 
   // Docker 状態表示
-  await showDockerStatus()
+  await showDockerStatus(dockerComposeFile)
 }
 
 /**
@@ -179,8 +190,13 @@ function showWorktreeEnvFiles(worktreePath: string): void {
  * await showDockerStatus()
  * ```
  */
-async function showDockerStatus(): Promise<void> {
+async function showDockerStatus(dockerComposeFile: string): Promise<void> {
   console.log("🐳 Docker Environment Status\n")
+
+  if (!dockerComposeFile) {
+    console.log("⚙️  Docker checks skipped (not configured)")
+    return
+  }
 
   try {
     // 実行中コンテナ表示

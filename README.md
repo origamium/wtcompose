@@ -161,7 +161,7 @@ end_command: ./scripts/cleanup.sh
 
 ```yaml
 base_branch: main
-docker_compose_file: ./docker-compose.yml
+docker_compose_file: ./docker-compose.yml  # 省略するとDockerチェックをスキップ
 
 copy_files:
   - .env
@@ -190,7 +190,7 @@ env:
 | 項目 | 型 | 説明 |
 |------|------|------|
 | `base_branch` | string | ベースブランチ名（デフォルト: `main`） |
-| `docker_compose_file` | string | Docker Composeファイルのパス |
+| `docker_compose_file` | string | Docker Composeファイルのパス（省略または空文字でDockerチェックをスキップ） |
 | `copy_files` | string[] | コピーするファイル/ディレクトリ |
 | `link_files` | string[] | symlinkを作成するファイル/ディレクトリ（`copy_files` より優先） |
 | `start_command` | string | worktree作成後に実行するコマンド |

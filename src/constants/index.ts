@@ -39,7 +39,7 @@ export const CONFIG_FILE_NAMES = [
 /** デフォルト設定値 */
 export const DEFAULT_CONFIG = {
   base_branch: "main",
-  docker_compose_file: "./docker-compose.yml",
+  docker_compose_file: "",
   copy_files: [] as string[],
   link_files: [] as string[],
   start_command: undefined as string | undefined,

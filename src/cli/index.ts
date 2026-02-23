@@ -5,6 +5,8 @@
  * コマンドライン引数の解析とコマンド実行を担当
  */
 
+import { realpathSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { Command } from "commander"
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION, EXIT_CODES } from "../constants/index.js"
 import { createCommand } from "./commands/create.js"
@@ -58,7 +60,8 @@ function main(): void {
 }
 
 // スクリプトとして実行された場合のみmain()を呼び出し
-if (import.meta.url === `file://${process.argv[1]}`) {
+// realpathSync resolves symlinks so npm-linked binaries work correctly
+if (realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   main()
 }
 

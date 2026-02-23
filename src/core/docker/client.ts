@@ -49,7 +49,10 @@ export function getRunningContainers(options?: ExecOptions): ContainerInfo[] {
     const output = execDockerCommand(DOCKER_COMMANDS.CONTAINERS, options)
     return parseContainerList(output)
   } catch (error) {
-    console.warn("Failed to get running containers:", error)
+    console.warn(
+      "Failed to get running containers:",
+      error instanceof Error ? error.message : String(error)
+    )
     return []
   }
 }
@@ -120,7 +123,10 @@ export function getContainerVolumes(containerId: string, options?: ExecOptions):
       .map((v) => v.trim())
       .filter((v) => v.length > 0 && v !== "<no value>")
   } catch (error) {
-    console.warn(`Failed to get volumes for container ${containerId}:`, error)
+    console.warn(
+      `Failed to get volumes for container ${containerId}:`,
+      error instanceof Error ? error.message : String(error)
+    )
     return []
   }
 }
@@ -149,7 +155,10 @@ export function getContainerNetworks(containerId: string, options?: ExecOptions)
       .map((n) => n.trim())
       .filter((n) => n.length > 0)
   } catch (error) {
-    console.warn(`Failed to get networks for container ${containerId}:`, error)
+    console.warn(
+      `Failed to get networks for container ${containerId}:`,
+      error instanceof Error ? error.message : String(error)
+    )
     return []
   }
 }
@@ -173,7 +182,10 @@ export function getDockerVolumes(options?: ExecOptions): VolumeInfo[] {
     const output = execDockerCommand(DOCKER_COMMANDS.VOLUMES, options)
     return parseVolumeList(output)
   } catch (error) {
-    console.warn("Failed to get Docker volumes:", error)
+    console.warn(
+      "Failed to get Docker volumes:",
+      error instanceof Error ? error.message : String(error)
+    )
     return []
   }
 }

@@ -1,102 +1,104 @@
 # wturbo
 
-**複数ブランチの開発環境を一瞬で切り替える**
+**Switch between multiple branch environments in an instant**
 
-Git worktreeを使って、ブランチごとに独立した作業ディレクトリを作成・管理するCLIツールです。
+A CLI tool that uses Git worktree to create and manage independent working directories for each branch.
 
-## こんな時に便利
+[日本語](README_ja.md)
 
-- メインブランチで作業中に、緊急のバグ修正が入った
-- 複数の機能ブランチを並行して開発したい
-- PRレビュー用に別ブランチをすぐに確認したい
-- `.env`などgitignoreされたファイルも新しい作業環境にコピーしたい
+## Use Cases
 
-## クイックスタート
+- You're working on the main branch and an urgent bug fix comes in
+- You want to develop multiple feature branches in parallel
+- You need to quickly check out another branch for PR review
+- You want `.env` and other gitignored files copied to a new working environment
 
-### 1. インストール
+## Quick Start
+
+### 1. Install
 
 ```bash
 npm install -g wturbo
 ```
 
-### 2. 設定ファイルを作成
+### 2. Create a Configuration File
 
-プロジェクトのルートに `wturbo.yaml` を作成:
+Create `wturbo.yaml` in your project root:
 
 ```yaml
 base_branch: main
 
-# gitignoreされているファイルを新しいworktreeにコピー
+# Copy gitignored files to new worktrees
 copy_files:
   - .env
   - .env.local
 
-# 大きなディレクトリはコピーせずsymlinkを張る
+# Create symlinks for large directories instead of copying
 link_files:
   - node_modules
 ```
 
-### 3. 使う
+### 3. Use It
 
 ```bash
-# 新しいブランチ用のworktreeを作成
+# Create a worktree for a new branch
 wturbo create feature/awesome-feature
 
-# 作業ディレクトリに移動
+# Move to the working directory
 cd ../worktree-feature-awesome-feature
 
-# 作業完了後、worktreeを削除
+# Remove the worktree when done
 wturbo remove feature/awesome-feature
 ```
 
-## コマンド
+## Commands
 
 ### `wturbo create <branch>`
 
-新しいworktreeを作成します。
+Creates a new worktree.
 
 ```bash
 wturbo create feature/new-feature
 wturbo create bugfix/urgent-fix
 ```
 
-**処理内容:**
-1. `git worktree add` でブランチ用の作業ディレクトリを作成（`base_branch` からブランチを作成）
-2. `copy_files` で指定したファイルをコピー
-3. `link_files` で指定したファイル/ディレクトリにsymlinkを作成（`copy_files` より優先）
-4. `env.file` で指定した環境変数ファイルをコピー（`env.adjust` が設定されている場合はポート等を調整してコピー）
-5. `docker_compose_file` が設定・存在する場合は worktree にコピーしてポート衝突を自動調整
-6. `start_command` を実行（設定時のみ）
+**What it does:**
+1. Creates a working directory for the branch using `git worktree add` (branches from `base_branch`)
+2. Copies files specified in `copy_files`
+3. Creates symlinks for files/directories specified in `link_files` (takes priority over `copy_files`)
+4. Copies environment variable files specified in `env.file` (adjusts ports etc. if `env.adjust` is configured)
+5. If `docker_compose_file` is configured and exists, copies it to the worktree with automatic port conflict resolution
+6. Runs `start_command` (if configured)
 
-**オプション:**
-- `-p, --path <path>` - worktreeの作成場所を指定（デフォルト: 親ディレクトリに `worktree-<branch名>` で作成）
-- `--no-create-branch` - 既存のブランチを使用（新規作成しない）
+**Options:**
+- `-p, --path <path>` - Specify worktree location (default: creates `worktree-<branch-name>` in the parent directory)
+- `--no-create-branch` - Use an existing branch (don't create a new one)
 
 ### `wturbo remove <branch>`
 
-worktreeを削除します。
+Removes a worktree.
 
 ```bash
 wturbo remove feature/new-feature
 ```
 
-**処理内容:**
-1. `docker_compose_file` が worktree に存在する場合は `docker compose down` を実行（`end_command` が未設定の場合）
-2. `end_command` を実行（設定時のみ）
-3. `git worktree remove` でworktreeを削除
+**What it does:**
+1. If `docker_compose_file` exists in the worktree, runs `docker compose down` (unless `end_command` is set)
+2. Runs `end_command` (if configured)
+3. Removes the worktree using `git worktree remove`
 
-**オプション:**
-- `-f, --force` - 未コミットの変更があっても強制削除
+**Options:**
+- `-f, --force` - Force removal even with uncommitted changes
 
 ### `wturbo status`
 
-現在のworktree一覧を表示します。
+Displays a list of current worktrees.
 
 ```bash
 wturbo status
 ```
 
-出力例:
+Example output:
 ```
 🌿 Git Worktrees (3 total)
   → main: /Users/me/project
@@ -104,9 +106,9 @@ wturbo status
     bugfix/login: /Users/me/worktree-bugfix-login
 ```
 
-## 設定ファイル
+## Configuration File
 
-以下のいずれかのパスに設定ファイルを配置します（優先順位順）:
+Place the configuration file at one of the following paths (in order of priority):
 
 - `wturbo.yaml`
 - `wturbo.yml`
@@ -115,27 +117,27 @@ wturbo status
 - `.wturbo/config.yaml`
 - `.wturbo/config.yml`
 
-### 基本設定
+### Base Branch
 
 ```yaml
 base_branch: main
 ```
 
-### ファイルコピー
+### File Copying
 
-gitignoreされているファイルや設定ファイルを新しいworktreeにコピー:
+Copy gitignored files and configuration files to new worktrees:
 
 ```yaml
 copy_files:
   - .env
   - .env.local
-  - .claude          # ディレクトリも可
+  - .claude          # directories are also supported
   - config/local.json
 ```
 
-### シンボリックリンク
+### Symbolic Links
 
-重いディレクトリ（`node_modules` など）はコピーせず、元リポジトリを参照するsymlinkを作成:
+Create symlinks to reference the original repository for heavy directories (like `node_modules`) instead of copying:
 
 ```yaml
 link_files:
@@ -143,25 +145,25 @@ link_files:
   - .cache
 ```
 
-> 同じパスが `copy_files` と `link_files` の両方にある場合、`link_files` が優先されます。
+> If the same path appears in both `copy_files` and `link_files`, `link_files` takes priority.
 
-### スクリプト実行
+### Script Execution
 
-worktree作成時・削除時にスクリプトを実行:
+Run scripts on worktree creation and removal:
 
 ```yaml
-# 作成後に実行（依存関係のインストールなど）
+# Run after creation (e.g., installing dependencies)
 start_command: ./scripts/setup.sh
 
-# 削除前に実行（クリーンアップなど）
+# Run before removal (e.g., cleanup)
 end_command: ./scripts/cleanup.sh
 ```
 
-### フル設定例
+### Full Configuration Example
 
 ```yaml
 base_branch: main
-docker_compose_file: ./docker-compose.yml  # 省略するとDockerチェックをスキップ
+docker_compose_file: ./docker-compose.yml  # omit to skip Docker checks
 
 copy_files:
   - .env
@@ -181,24 +183,24 @@ env:
     - .env
     - .env.local
   adjust:
-    APP_PORT: 1000    # ポート番号に+1000
+    APP_PORT: 1000    # adds +1000 to port number
     DB_PORT: 1000
 ```
 
-## 設定項目一覧
+## Configuration Reference
 
-| 項目 | 型 | 説明 |
-|------|------|------|
-| `base_branch` | string | ベースブランチ名（デフォルト: `main`） |
-| `docker_compose_file` | string | Docker Composeファイルのパス（省略または空文字でDockerチェックをスキップ） |
-| `copy_files` | string[] | コピーするファイル/ディレクトリ |
-| `link_files` | string[] | symlinkを作成するファイル/ディレクトリ（`copy_files` より優先） |
-| `start_command` | string | worktree作成後に実行するコマンド |
-| `end_command` | string | worktree削除前に実行するコマンド |
-| `env.file` | string[] | 環境変数ファイルのリスト |
-| `env.adjust` | object | 環境変数の調整（数値: 加算, 文字列: 置換, null: 削除） |
+| Field | Type | Description |
+|-------|------|-------------|
+| `base_branch` | string | Base branch name (default: `main`) |
+| `docker_compose_file` | string | Path to Docker Compose file (omit or empty string to skip Docker checks) |
+| `copy_files` | string[] | Files/directories to copy |
+| `link_files` | string[] | Files/directories to symlink (takes priority over `copy_files`) |
+| `start_command` | string | Command to run after worktree creation |
+| `end_command` | string | Command to run before worktree removal |
+| `env.file` | string[] | List of environment variable files |
+| `env.adjust` | object | Environment variable adjustments (number: add, string: replace, null: remove) |
 
-## 必要環境
+## Requirements
 
 - Node.js 18+
 - Git

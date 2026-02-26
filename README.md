@@ -183,8 +183,8 @@ env:
     - .env
     - .env.local
   adjust:
-    APP_PORT: 1000    # adds +1000 to port number
-    DB_PORT: 1000
+    APP_PORT: 1    # finds next free port starting from original+1
+    DB_PORT: 1
 ```
 
 ## Configuration Reference
@@ -198,7 +198,7 @@ env:
 | `start_command` | string | Command to run after worktree creation |
 | `end_command` | string | Command to run before worktree removal |
 | `env.file` | string[] | List of environment variable files |
-| `env.adjust` | object | Environment variable adjustments (number: add, string: replace, null: remove) |
+| `env.adjust` | object | Environment variable adjustments (number: find next free port from original+1, string: replace, null: remove) |
 
 ## Requirements
 

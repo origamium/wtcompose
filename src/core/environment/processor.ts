@@ -6,7 +6,7 @@
 import { existsSync } from "node:fs"
 import * as path from "node:path"
 import fs from "fs-extra"
-import { BACKUP_EXTENSION, FILE_ENCODING } from "../../constants/index.js"
+import { BACKUP_EXTENSION, FILE_ENCODING, PORT_RANGE } from "../../constants/index.js"
 import type { FileOperationOptions } from "../../types/index.js"
 
 // =============================================================================
@@ -41,6 +41,30 @@ interface ParsedEnvFile {
   entries: EnvEntry[]
   /** 元のファイル内容（バックアップ用） */
   originalContent: string
+}
+
+// =============================================================================
+// ポート解決ユーティリティ
+// =============================================================================
+
+/**
+ * 使用中ポートと衝突しない最小のポートを返す
+ * originalPort + 1 から順に空きを探す
+ */
+function findNextFreePort(originalPort: number, usedPorts: number[]): number {
+  let candidate = originalPort + 1
+  let attempts = 0
+  while (attempts < PORT_RANGE.SEARCH_LIMIT) {
+    if (!usedPorts.includes(candidate)) {
+      return candidate
+    }
+    candidate++
+    attempts++
+  }
+  console.warn(
+    `⚠️  Could not find available port after ${PORT_RANGE.SEARCH_LIMIT} attempts, using ${originalPort + 1}`
+  )
+  return originalPort + 1
 }
 
 // =============================================================================
@@ -210,13 +234,17 @@ export function copyAndAdjustEnvFile(
   sourcePath: string,
   targetPath: string,
   adjustments: Record<string, string | number | null | ((value: string) => string)>,
-  options?: FileOperationOptions
+  options?: FileOperationOptions,
+  usedPorts: number[] = []
 ): number {
   const parsed = parseEnvFile(sourcePath, options)
   let adjustedCount = 0
 
   // 削除対象のキーを Set で管理（センチネル値衝突を防ぐ）
   const keysToDelete = new Set<string>()
+
+  // 数値調整で確保済みのポートを追跡（ファイル内衝突防止 + 引数の usedPorts を加算）
+  const assignedPorts: number[] = [...usedPorts]
 
   // 既存の環境変数を調整
   for (const line of parsed.lines) {
@@ -236,7 +264,9 @@ export function copyAndAdjustEnvFile(
     } else if (typeof adjustment === "number") {
       const originalValue = parseInt(line.value, 10)
       if (!Number.isNaN(originalValue)) {
-        const newValue = (originalValue + adjustment).toString()
+        const newPort = findNextFreePort(originalValue, assignedPorts)
+        assignedPorts.push(newPort)
+        const newValue = newPort.toString()
         line.value = newValue
         const entry = parsed.entries.find((e) => e.key === line.key)
         if (entry) entry.value = newValue

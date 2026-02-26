@@ -141,20 +141,49 @@ describe("serializeEnvFile", () => {
 // =============================================================================
 
 describe("copyAndAdjustEnvFile", () => {
-  it("should increment numeric values (port adjustment)", () => {
+  it("should find next free port (+1 from original) for numeric adjustments", () => {
     const sourcePath = path.join(tmpDir, ".env")
     const targetPath = path.join(tmpDir, ".env.adjusted")
     fs.writeFileSync(sourcePath, "APP_PORT=3000\nDB_PORT=5432\n")
 
     const count = copyAndAdjustEnvFile(sourcePath, targetPath, {
-      APP_PORT: 1000,
-      DB_PORT: 1000,
+      APP_PORT: 1,
+      DB_PORT: 1,
     })
 
     expect(count).toBe(2)
     const result = fs.readFileSync(targetPath, "utf-8")
-    expect(result).toContain("APP_PORT=4000")
-    expect(result).toContain("DB_PORT=6432")
+    // +1 from original, first free port
+    expect(result).toContain("APP_PORT=3001")
+    expect(result).toContain("DB_PORT=5433")
+  })
+
+  it("should resolve within-file port collisions by incrementing further", () => {
+    // Two entries both want the next port after 3000 → second must get 3002
+    const sourcePath = path.join(tmpDir, ".env")
+    const targetPath = path.join(tmpDir, ".env.adjusted")
+    fs.writeFileSync(sourcePath, "APP_PORT=3000\nADMIN_PORT=3000\n")
+
+    copyAndAdjustEnvFile(sourcePath, targetPath, {
+      APP_PORT: 1,
+      ADMIN_PORT: 1,
+    })
+
+    const result = fs.readFileSync(targetPath, "utf-8")
+    expect(result).toContain("APP_PORT=3001")
+    expect(result).toContain("ADMIN_PORT=3002")
+  })
+
+  it("should skip already-used ports passed via usedPorts argument", () => {
+    const sourcePath = path.join(tmpDir, ".env")
+    const targetPath = path.join(tmpDir, ".env.adjusted")
+    fs.writeFileSync(sourcePath, "APP_PORT=3000\n")
+
+    // 3001 is already used by another worktree; expect 3002
+    copyAndAdjustEnvFile(sourcePath, targetPath, { APP_PORT: 1 }, undefined, [3001])
+
+    const result = fs.readFileSync(targetPath, "utf-8")
+    expect(result).toContain("APP_PORT=3002")
   })
 
   it("should replace with string values", () => {

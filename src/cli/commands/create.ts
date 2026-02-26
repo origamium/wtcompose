@@ -15,7 +15,7 @@ import {
   readComposeFile,
   writeComposeFile,
 } from "../../core/docker/compose.js"
-import { copyAndAdjustEnvFile } from "../../core/environment/processor.js"
+import { copyAndAdjustEnvFile, parseEnvFile } from "../../core/environment/processor.js"
 import { branchExists, getGitRoot, isGitRepository } from "../../core/git/repository.js"
 import { createWorktree, getWorktreePath, listWorktrees } from "../../core/git/worktree.js"
 import type { WTurboConfig } from "../../types/index.js"
@@ -323,6 +323,56 @@ async function setupDockerCompose(
 }
 
 /**
+ * 他のworktreeの環境変数ファイルから既に使われているポート番号を収集する
+ * （数値調整キーに対応するポートのみ収集）
+ */
+function collectWorktreeEnvPorts(
+  sourceRoot: string,
+  targetRoot: string,
+  config: WTurboConfig
+): number[] {
+  const adjustedKeys = Object.entries(config.env.adjust)
+    .filter(([, v]) => typeof v === "number")
+    .map(([k]) => k)
+
+  if (adjustedKeys.length === 0) return []
+
+  const usedPorts: number[] = []
+
+  try {
+    const worktrees = listWorktrees()
+    for (const worktree of worktrees) {
+      const resolvedPath = path.resolve(worktree.path)
+      if (resolvedPath === path.resolve(targetRoot)) continue
+      if (resolvedPath === path.resolve(sourceRoot)) continue
+
+      for (const relativePath of config.env.file) {
+        const envPath = path.resolve(worktree.path, relativePath)
+        if (!existsSync(envPath)) continue
+
+        try {
+          const parsed = parseEnvFile(envPath)
+          for (const entry of parsed.entries) {
+            if (adjustedKeys.includes(entry.key)) {
+              const port = parseInt(entry.value, 10)
+              if (!Number.isNaN(port)) {
+                usedPorts.push(port)
+              }
+            }
+          }
+        } catch {
+          // ignore errors reading individual worktree env files
+        }
+      }
+    }
+  } catch {
+    // ignore worktree listing errors (e.g. not in git repo)
+  }
+
+  return usedPorts
+}
+
+/**
  * env.fileに記載された環境変数ファイルをworktreeにコピーしenv.adjustを適用
  */
 async function applyEnvAdjustments(
@@ -330,6 +380,9 @@ async function applyEnvAdjustments(
   targetRoot: string,
   config: WTurboConfig
 ): Promise<void> {
+  // 他のworktreeで使用中のポートを収集（衝突防止）
+  const usedPorts = collectWorktreeEnvPorts(sourceRoot, targetRoot, config)
+
   for (const relativePath of config.env.file) {
     const sourcePath = path.resolve(sourceRoot, relativePath)
     const targetPath = path.resolve(targetRoot, relativePath)
@@ -341,7 +394,13 @@ async function applyEnvAdjustments(
 
     try {
       await fs.ensureDir(path.dirname(targetPath))
-      const adjustedCount = copyAndAdjustEnvFile(sourcePath, targetPath, config.env.adjust)
+      const adjustedCount = copyAndAdjustEnvFile(
+        sourcePath,
+        targetPath,
+        config.env.adjust,
+        undefined,
+        usedPorts
+      )
       console.log(`  ✅ Applied ${adjustedCount} adjustment(s): ${relativePath}`)
     } catch (error) {
       console.log(`  ❌ Failed to adjust ${relativePath}: ${getErrorMessage(error)}`)

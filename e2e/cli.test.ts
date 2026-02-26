@@ -972,12 +972,12 @@ describe("Create Command - env.adjust", () => {
     expect(existsSync(envPath)).toBe(true)
 
     const envContent = fs.readFileSync(envPath, "utf-8")
-    // APP_PORT=3000 + 1000 = 4000
-    expect(envContent).toContain("APP_PORT=4000")
-    // DB_PORT=5432 + 1000 = 6432
-    expect(envContent).toContain("DB_PORT=6432")
-    // REDIS_PORT=6379 + 1000 = 7379
-    expect(envContent).toContain("REDIS_PORT=7379")
+    // APP_PORT=3000 → finds next free port from 3001
+    expect(envContent).toContain("APP_PORT=3001")
+    // DB_PORT=5432 → finds next free port from 5433
+    expect(envContent).toContain("DB_PORT=5433")
+    // REDIS_PORT=6379 → finds next free port from 6380
+    expect(envContent).toContain("REDIS_PORT=6380")
   })
 
   it("should copy env file even when adjust is empty", () => {

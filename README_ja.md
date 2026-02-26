@@ -183,8 +183,8 @@ env:
     - .env
     - .env.local
   adjust:
-    APP_PORT: 1000    # ポート番号に+1000
-    DB_PORT: 1000
+    APP_PORT: 1    # 元の値+1から空きポートを自動検索
+    DB_PORT: 1
 ```
 
 ## 設定項目一覧
@@ -198,7 +198,7 @@ env:
 | `start_command` | string | worktree作成後に実行するコマンド |
 | `end_command` | string | worktree削除前に実行するコマンド |
 | `env.file` | string[] | 環境変数ファイルのリスト |
-| `env.adjust` | object | 環境変数の調整（数値: 加算, 文字列: 置換, null: 削除） |
+| `env.adjust` | object | 環境変数の調整（数値: 元の値+1から空きポートを自動検索, 文字列: 置換, null: 削除） |
 
 ## 必要環境
 

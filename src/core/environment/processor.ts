@@ -51,11 +51,11 @@ interface ParsedEnvFile {
  * 使用中ポートと衝突しない最小のポートを返す
  * originalPort + 1 から順に空きを探す
  */
-function findNextFreePort(originalPort: number, usedPorts: number[]): number {
+function findNextFreePort(originalPort: number, usedPorts: Set<number>): number {
   let candidate = originalPort + 1
   let attempts = 0
   while (attempts < PORT_RANGE.SEARCH_LIMIT) {
-    if (!usedPorts.includes(candidate)) {
+    if (!usedPorts.has(candidate)) {
       return candidate
     }
     candidate++
@@ -244,7 +244,10 @@ export function copyAndAdjustEnvFile(
   const keysToDelete = new Set<string>()
 
   // 数値調整で確保済みのポートを追跡（ファイル内衝突防止 + 引数の usedPorts を加算）
-  const assignedPorts: number[] = [...usedPorts]
+  const assignedPorts = new Set<number>(usedPorts)
+
+  // entries への O(1) ルックアップ用 Map（3回の find() を置き換える）
+  const entryByKey = new Map(parsed.entries.map((e) => [e.key, e]))
 
   // 既存の環境変数を調整
   for (const line of parsed.lines) {
@@ -258,24 +261,24 @@ export function copyAndAdjustEnvFile(
     } else if (typeof adjustment === "string") {
       line.value = adjustment
       // entries 配列も同期
-      const entry = parsed.entries.find((e) => e.key === line.key)
+      const entry = entryByKey.get(line.key)
       if (entry) entry.value = adjustment
       adjustedCount++
     } else if (typeof adjustment === "number") {
       const originalValue = parseInt(line.value, 10)
       if (!Number.isNaN(originalValue)) {
         const newPort = findNextFreePort(originalValue, assignedPorts)
-        assignedPorts.push(newPort)
+        assignedPorts.add(newPort)
         const newValue = newPort.toString()
         line.value = newValue
-        const entry = parsed.entries.find((e) => e.key === line.key)
+        const entry = entryByKey.get(line.key)
         if (entry) entry.value = newValue
         adjustedCount++
       }
     } else if (typeof adjustment === "function") {
       const newValue = adjustment(line.value)
       line.value = newValue
-      const entry = parsed.entries.find((e) => e.key === line.key)
+      const entry = entryByKey.get(line.key)
       if (entry) entry.value = newValue
       adjustedCount++
     }

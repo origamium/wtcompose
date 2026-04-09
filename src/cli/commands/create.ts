@@ -331,29 +331,31 @@ function collectWorktreeEnvPorts(
   targetRoot: string,
   config: WTurboConfig
 ): number[] {
-  const adjustedKeys = Object.entries(config.env.adjust)
-    .filter(([, v]) => typeof v === "number")
-    .map(([k]) => k)
+  const adjustedKeys = new Set(
+    Object.entries(config.env.adjust)
+      .filter(([, v]) => typeof v === "number")
+      .map(([k]) => k)
+  )
 
-  if (adjustedKeys.length === 0) return []
+  if (adjustedKeys.size === 0) return []
 
   const usedPorts: number[] = []
+  const resolvedTarget = path.resolve(targetRoot)
+  const resolvedSource = path.resolve(sourceRoot)
 
   try {
     const worktrees = listWorktrees()
     for (const worktree of worktrees) {
       const resolvedPath = path.resolve(worktree.path)
-      if (resolvedPath === path.resolve(targetRoot)) continue
-      if (resolvedPath === path.resolve(sourceRoot)) continue
+      if (resolvedPath === resolvedTarget || resolvedPath === resolvedSource) continue
 
       for (const relativePath of config.env.file) {
         const envPath = path.resolve(worktree.path, relativePath)
-        if (!existsSync(envPath)) continue
 
         try {
           const parsed = parseEnvFile(envPath)
           for (const entry of parsed.entries) {
-            if (adjustedKeys.includes(entry.key)) {
+            if (adjustedKeys.has(entry.key)) {
               const port = parseInt(entry.value, 10)
               if (!Number.isNaN(port)) {
                 usedPorts.push(port)

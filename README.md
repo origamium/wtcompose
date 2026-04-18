@@ -2,7 +2,7 @@
 
 **Switch between multiple branch environments in an instant**
 
-A CLI tool that uses Git worktree to create and manage independent working directories for each branch.
+A CLI tool that uses Git worktree to create and manage independent working directories for each branch — with automatic environment file adjustment, Docker Compose port isolation, and symlink support for heavy directories.
 
 [日本語](README_ja.md)
 
@@ -12,6 +12,32 @@ A CLI tool that uses Git worktree to create and manage independent working direc
 - You want to develop multiple feature branches in parallel
 - You need to quickly check out another branch for PR review
 - You want `.env` and other gitignored files copied to a new working environment
+- You need Docker Compose services running on different ports per branch
+
+## How It Works
+
+```
+project/                        ← main worktree (your original repo)
+├── wturbo.yaml
+├── .env
+├── docker-compose.yml
+├── node_modules/
+└── src/
+
+worktree-feature-auth/          ← created by wturbo
+├── .env                        ← copied & port-adjusted
+├── docker-compose.yml          ← copied & port-adjusted
+├── node_modules -> ../project/node_modules  ← symlinked
+└── src/                        ← git worktree (shared .git)
+```
+
+When you run `wturbo create`, it:
+1. Creates a Git worktree (a separate working directory sharing the same `.git`)
+2. Copies gitignored files you specify (`.env`, configs, secrets)
+3. Creates symlinks for heavy directories (`node_modules`, `.cache`)
+4. Adjusts ports in `.env` files to avoid conflicts
+5. Copies Docker Compose files with automatic port remapping
+6. Runs your setup script (if configured)
 
 ## Quick Start
 
@@ -19,6 +45,12 @@ A CLI tool that uses Git worktree to create and manage independent working direc
 
 ```bash
 npm install -g wturbo
+```
+
+Or use without installing:
+
+```bash
+npx wturbo create feature/awesome-feature
 ```
 
 ### 2. Create a Configuration File
@@ -71,8 +103,39 @@ wturbo create bugfix/urgent-fix
 6. Runs `start_command` (if configured)
 
 **Options:**
-- `-p, --path <path>` - Specify worktree location (default: creates `worktree-<branch-name>` in the parent directory)
-- `--no-create-branch` - Use an existing branch (don't create a new one)
+
+| Option | Description |
+|--------|-------------|
+| `-p, --path <path>` | Specify worktree location (default: `worktree-<branch-name>` in the parent directory) |
+| `--no-create-branch` | Use an existing branch (don't create a new one) |
+| `--no-docker` | Skip Docker Compose setup entirely |
+| `--no-env` | Skip environment file processing (`.env` copy/adjust) |
+| `--no-copy` | Skip file copying (`copy_files`) |
+| `--no-link` | Skip symlink creation (`link_files`) |
+| `--no-start` | Skip `start_command` execution |
+| `--dry-run` | Show what would be done without making any changes |
+
+**Examples:**
+
+```bash
+# Create worktree without Docker setup (faster, no Docker needed)
+wturbo create feature/quick-fix --no-docker
+
+# Create worktree without running the start script
+wturbo create feature/wip --no-start
+
+# Create a minimal worktree (just git worktree, no file operations)
+wturbo create feature/minimal --no-docker --no-env --no-copy --no-link --no-start
+
+# Preview what would happen
+wturbo create feature/test --dry-run
+
+# Use a specific path
+wturbo create feature/auth -p /tmp/auth-worktree
+
+# Use an existing branch
+wturbo create release/v2.0 --no-create-branch
+```
 
 ### `wturbo remove <branch>`
 
@@ -88,22 +151,53 @@ wturbo remove feature/new-feature
 3. Removes the worktree using `git worktree remove`
 
 **Options:**
-- `-f, --force` - Force removal even with uncommitted changes
+
+| Option | Description |
+|--------|-------------|
+| `-f, --force` | Force removal even with uncommitted changes |
+| `--no-docker` | Skip Docker Compose teardown (`docker compose down`) |
+| `--no-end` | Skip `end_command` execution |
+
+**Examples:**
+
+```bash
+# Remove without stopping Docker services (when Docker isn't running)
+wturbo remove feature/old-branch --no-docker
+
+# Force removal with uncommitted changes, skip cleanup
+wturbo remove feature/abandoned -f --no-end
+```
 
 ### `wturbo status`
 
-Displays a list of current worktrees.
+Displays a list of current worktrees and their Docker environments.
 
 ```bash
 wturbo status
 ```
 
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-a, --all` | Show all worktrees, not just the current one |
+| `--docker-only` | Show only Docker-related information |
+
 Example output:
 ```
-🌿 Git Worktrees (3 total)
-  → main: /Users/me/project
-    feature/auth: /Users/me/worktree-feature-auth
-    bugfix/login: /Users/me/worktree-bugfix-login
+📁 Git Worktrees Status
+
+→ main (main)
+   📂 /Users/me/project
+   🐳 Docker: docker-compose.yml
+   📦 Services: 3
+   🔧 Environment: .env, .env.local
+
+  feature/auth
+   📂 /Users/me/worktree-feature-auth
+   🐳 Docker: docker-compose.yml
+   📦 Services: 3
+   🔧 Environment: .env, .env.local
 ```
 
 ## Configuration File
@@ -159,11 +253,50 @@ start_command: ./scripts/setup.sh
 end_command: ./scripts/cleanup.sh
 ```
 
+### Environment Variable Adjustment
+
+Automatically adjust port numbers in `.env` files to prevent conflicts between worktrees:
+
+```yaml
+env:
+  file:
+    - .env
+    - .env.local
+  adjust:
+    APP_PORT: 1        # find next free port starting from original+1
+    DB_PORT: 1         # find next free port starting from original+1
+    API_KEY: "new-key" # replace with a fixed string
+    DEBUG_PORT: null    # remove the variable entirely
+```
+
+The `adjust` field supports three types of values:
+- **number** (`1`): Finds the next free port starting from the original value + the number. Scans other worktree `.env` files and running containers to avoid collisions.
+- **string** (`"new-key"`): Replaces the value with the given string.
+- **null**: Removes the variable from the file.
+
+### Docker Compose Integration
+
+When `docker_compose_file` is configured, wturbo automatically:
+- Copies the Compose file to each new worktree
+- Remaps ports to avoid conflicts with running containers
+- Runs `docker compose down` before removing a worktree
+
+```yaml
+docker_compose_file: ./docker-compose.yml
+```
+
+Set to an empty string or omit entirely to disable Docker integration:
+
+```yaml
+docker_compose_file: ""   # explicitly disable
+# or simply omit the field
+```
+
 ### Full Configuration Example
 
 ```yaml
 base_branch: main
-docker_compose_file: ./docker-compose.yml  # omit to skip Docker checks
+docker_compose_file: ./docker-compose.yml
 
 copy_files:
   - .env
@@ -189,21 +322,78 @@ env:
 
 ## Configuration Reference
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `base_branch` | string | Base branch name (default: `main`) |
-| `docker_compose_file` | string | Path to Docker Compose file (omit or empty string to skip Docker checks) |
-| `copy_files` | string[] | Files/directories to copy |
-| `link_files` | string[] | Files/directories to symlink (takes priority over `copy_files`) |
-| `start_command` | string | Command to run after worktree creation |
-| `end_command` | string | Command to run before worktree removal |
-| `env.file` | string[] | List of environment variable files |
-| `env.adjust` | object | Environment variable adjustments (number: find next free port from original+1, string: replace, null: remove) |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `base_branch` | string | `"main"` | Base branch name for new worktree branches |
+| `docker_compose_file` | string | `""` | Path to Docker Compose file (omit or empty to skip Docker) |
+| `copy_files` | string[] | `[]` | Files/directories to copy to new worktrees |
+| `link_files` | string[] | `[]` | Files/directories to symlink (takes priority over `copy_files`) |
+| `start_command` | string | — | Command to run after worktree creation |
+| `end_command` | string | — | Command to run before worktree removal |
+| `env.file` | string[] | `["./.env"]` | Environment variable files to process |
+| `env.adjust` | object | `{}` | Adjustments: number = find free port, string = replace, null = remove |
+
+## CLI Options Summary
+
+### Global behavior
+
+All `--no-*` flags use Commander.js negation syntax. For example, `--no-docker` sets `docker` to `false`.
+
+### `create` options
+
+```
+-p, --path <path>     Custom worktree location
+--no-create-branch    Use existing branch
+--no-docker           Skip Docker Compose setup
+--no-env              Skip .env file processing
+--no-copy             Skip copy_files
+--no-link             Skip link_files (symlinks)
+--no-start            Skip start_command
+--dry-run             Preview without changes
+```
+
+### `remove` options
+
+```
+-f, --force           Force removal
+--no-docker           Skip docker compose down
+--no-end              Skip end_command
+```
+
+### `status` options
+
+```
+-a, --all             Show all worktrees
+--docker-only         Show only Docker info
+```
 
 ## Requirements
 
 - Node.js 18+
 - Git
+- Docker (optional — only needed if `docker_compose_file` is configured)
+
+## Troubleshooting
+
+### "Not in a git repository"
+
+Run wturbo from inside a Git repository. The tool detects the Git root automatically.
+
+### Port conflicts
+
+If port adjustment isn't working as expected, wturbo scans:
+1. Other worktree `.env` files for ports in use
+2. Running Docker containers for occupied ports
+
+Use `wturbo status -a` to see what ports are currently assigned across worktrees.
+
+### Docker not available
+
+If Docker isn't installed or the daemon isn't running, wturbo gracefully skips Docker operations. Use `--no-docker` to suppress Docker-related warnings entirely.
+
+### Worktree already exists
+
+If `git worktree add` fails because the branch already exists as a worktree, use `wturbo status` to check existing worktrees, then `wturbo remove` the old one first.
 
 ## License
 

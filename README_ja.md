@@ -168,6 +168,53 @@ wturbo remove feature/old-branch --no-docker
 wturbo remove feature/abandoned -f --no-end
 ```
 
+### `wturbo ls` (alias: `list`)
+
+軽量でスクリプト向けのworktree一覧表示。Unixの`ls`に近い使い勝手です。Docker情報が不要で、worktreeだけを素早く確認したい場合に使います。
+
+```bash
+wturbo ls
+wturbo list      # 同じ
+```
+
+**オプション:**
+
+| オプション | 説明 |
+|-----------|------|
+| `-l, --long` | 長形式（短縮コミットハッシュ、経過時間、dirty状態、サブジェクト） |
+| `--json` | 機械可読JSON出力（`-l` と組み合わせると拡張フィールドも追加） |
+| `-p, --paths` | 絶対パスのみを1行ずつ出力（`$(wturbo ls -p \| fzf)` 等の用途に便利） |
+
+**出力例:**
+
+デフォルト（compact、gitコール1回）:
+```
+→ main            /Users/me/proj                          [main]
+  feature/api     /Users/me/proj-worktrees/feature-api
+  feature/ui      /Users/me/proj-worktrees/feature-ui     [locked]
+  hotfix/crash    /Users/me/proj-worktrees/hotfix-crash   [prunable]
+  (detached)      /Users/me/proj-worktrees/detached-xyz
+```
+
+長形式（`-l`、worktree毎に `git log`/`git status` を並列実行）:
+```
+  BRANCH          COMMIT   AGE        D  PATH                                   TAGS / SUBJECT
+→ main            a1b2c3d  2h ago     *  /Users/me/proj                         [main] Add foo
+  feature/api     9f8e7d6  3d ago        /Users/me/proj-worktrees/feature-api   WIP refactor
+```
+タグ: `[main]` メインリポジトリ、`[locked]` `git worktree lock` 済み、`[prunable]` ディレクトリ消失、`[bare]` ベアリポジトリ。先頭の `→` は現在の作業ディレクトリを含むworktreeを示します（detached HEADでも正しく判定）。
+
+パスのみ（`-p`、シェル連携用）:
+```bash
+# 別worktreeにfzfで移動:
+cd "$(wturbo ls -p | fzf)"
+```
+
+JSON（`--json`）:
+```bash
+wturbo ls --json | jq '.[] | select(.isMain == false) | .path'
+```
+
 ### `wturbo status`
 
 現在のworktree一覧とDocker環境の状態を表示します。
@@ -365,6 +412,14 @@ env:
 ```
 -a, --all             全worktreeを表示
 --docker-only         Docker情報のみ表示
+```
+
+### `ls` オプション
+
+```
+-l, --long            長形式（コミットハッシュ、経過時間、dirty、サブジェクト）
+--json                JSON出力（-l と併用で拡張フィールド追加）
+-p, --paths           絶対パスのみを1行ずつ出力
 ```
 
 ## 必要環境

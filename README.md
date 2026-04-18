@@ -168,6 +168,53 @@ wturbo remove feature/old-branch --no-docker
 wturbo remove feature/abandoned -f --no-end
 ```
 
+### `wturbo ls` (alias: `list`)
+
+Lightweight, scriptable listing of worktrees — similar to Unix `ls`. Use this when you just want to see what worktrees exist, without the Docker noise from `status`.
+
+```bash
+wturbo ls
+wturbo list      # same thing
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `-l, --long` | Long format with short commit hash, age, dirty state, and subject |
+| `--json` | Machine-readable JSON output (combine with `-l` for enriched fields) |
+| `-p, --paths` | Print only absolute paths, one per line (for `$(wturbo ls -p \| fzf)` style usage) |
+
+**Output examples:**
+
+Default (compact, 1 git call):
+```
+→ main            /Users/me/proj                          [main]
+  feature/api     /Users/me/proj-worktrees/feature-api
+  feature/ui      /Users/me/proj-worktrees/feature-ui     [locked]
+  hotfix/crash    /Users/me/proj-worktrees/hotfix-crash   [prunable]
+  (detached)      /Users/me/proj-worktrees/detached-xyz
+```
+
+Long (`-l`, runs `git log`/`git status` per worktree in parallel):
+```
+  BRANCH          COMMIT   AGE        D  PATH                                   TAGS / SUBJECT
+→ main            a1b2c3d  2h ago     *  /Users/me/proj                         [main] Add foo
+  feature/api     9f8e7d6  3d ago        /Users/me/proj-worktrees/feature-api   WIP refactor
+```
+Tags: `[main]` marks the main repository worktree, `[locked]` for `git worktree lock`, `[prunable]` when the worktree dir is gone, `[bare]` for bare repos. The `→` in column 0 marks the worktree containing your current working directory (works even in detached-HEAD state).
+
+Paths-only (`-p`, for shell pipelines):
+```bash
+# Jump to another worktree via fzf:
+cd "$(wturbo ls -p | fzf)"
+```
+
+JSON (`--json`):
+```bash
+wturbo ls --json | jq '.[] | select(.isMain == false) | .path'
+```
+
 ### `wturbo status`
 
 Displays a list of current worktrees and their Docker environments.
@@ -365,6 +412,14 @@ All `--no-*` flags use Commander.js negation syntax. For example, `--no-docker` 
 ```
 -a, --all             Show all worktrees
 --docker-only         Show only Docker info
+```
+
+### `ls` options
+
+```
+-l, --long            Long format with commit hash, age, dirty, subject
+--json                JSON output (combine with -l for enriched fields)
+-p, --paths           Absolute paths only, one per line
 ```
 
 ## Requirements

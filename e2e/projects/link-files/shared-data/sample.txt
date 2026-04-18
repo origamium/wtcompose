@@ -1,0 +1,2 @@
+This directory is symlinked across worktrees via link_files.
+Used by e2e tests to verify symlink creation.

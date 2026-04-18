@@ -1,0 +1,5 @@
+{
+  "fixture": "link-files",
+  "testData": "copy-only-should-be-regular-file",
+  "version": 1
+}

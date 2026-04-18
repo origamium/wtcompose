@@ -136,18 +136,12 @@ export interface ComposeConfig {
 // =============================================================================
 
 /**
- * コマンドオプション
+ * status コマンドのオプション
  */
 export interface CommandOptions {
-  /** ブランチ名 */
-  branch?: string
-  /** ビルドフラグ */
-  build?: boolean
-  /** 削除フラグ */
-  remove?: boolean
-  /** 全体表示フラグ */
+  /** 全worktreeを表示するフラグ */
   all?: boolean
-  /** Docker専用表示フラグ */
+  /** Docker情報のみ表示するフラグ */
   dockerOnly?: boolean
 }
 

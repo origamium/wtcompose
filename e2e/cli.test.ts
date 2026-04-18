@@ -54,6 +54,17 @@ describe("Help and Version Commands", () => {
       expect(result.stdout).toContain("status")
       expect(result.stdout).toContain("create")
       expect(result.stdout).toContain("remove")
+      expect(result.stdout).toContain("ls")
+    })
+
+    it("should display ls command help with all options", () => {
+      const result = testRepo.runCLI("ls --help")
+
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("List git worktrees")
+      expect(result.stdout).toContain("-l, --long")
+      expect(result.stdout).toContain("--json")
+      expect(result.stdout).toContain("-p, --paths")
     })
 
     it("should display create command help with all options", () => {
@@ -1040,5 +1051,124 @@ describe("Create Command - --no-create-branch", () => {
     expect(result.exitCode).toBe(0)
     expect(result.combined).toContain("Creating new branch: brand-new-branch")
     expect(testRepo.branchExists("brand-new-branch")).toBe(true)
+  })
+})
+
+// =============================================================================
+// LS COMMAND
+// =============================================================================
+
+describe("LS Command", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("basic", "ls")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  describe("default output", () => {
+    it("should list the main worktree with current marker and [main] tag", () => {
+      const result = testRepo.runCLI("ls")
+
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("main")
+      expect(result.stdout).toContain("[main]")
+      expect(result.stdout).toContain("→")
+    })
+
+    it("should list additional worktrees after create", () => {
+      testRepo.runCLI("create feature/ls-test")
+      const result = testRepo.runCLI("ls")
+
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("main")
+      expect(result.stdout).toContain("feature/ls-test")
+    })
+  })
+
+  describe("--paths / -p", () => {
+    it("should emit only absolute paths, no marker, no header", () => {
+      testRepo.runCLI("create feature/paths-test")
+      const result = testRepo.runCLI("ls -p")
+
+      expect(result.exitCode).toBe(0)
+      const lines = result.stdout.trim().split("\n")
+      expect(lines.length).toBe(2)
+      expect(lines.every((l) => path.isAbsolute(l))).toBe(true)
+      expect(result.stdout).not.toContain("→")
+      expect(result.stdout).not.toContain("[main]")
+      expect(result.stdout).not.toContain("BRANCH")
+    })
+  })
+
+  describe("--json", () => {
+    it("should output parseable JSON with core fields", () => {
+      const result = testRepo.runCLI("ls --json")
+
+      expect(result.exitCode).toBe(0)
+      const parsed = JSON.parse(result.stdout)
+      expect(Array.isArray(parsed)).toBe(true)
+      expect(parsed.length).toBeGreaterThanOrEqual(1)
+      expect(parsed[0]).toHaveProperty("path")
+      expect(parsed[0]).toHaveProperty("branch")
+      expect(parsed[0]).toHaveProperty("head")
+      expect(parsed[0]).toHaveProperty("isMain")
+      expect(parsed[0]).toHaveProperty("isCurrent")
+      expect(parsed[0]).toHaveProperty("locked")
+      // No enrichment fields without -l
+      expect(parsed[0]).not.toHaveProperty("shortHash")
+    })
+  })
+
+  describe("--long / -l", () => {
+    it("should include commit hash, age, and dirty columns", () => {
+      const result = testRepo.runCLI("ls -l")
+
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("BRANCH")
+      expect(result.stdout).toContain("COMMIT")
+      expect(result.stdout).toContain("AGE")
+      expect(result.stdout).toContain("PATH")
+    })
+
+    it("should include enrichment fields when combined with --json", () => {
+      const result = testRepo.runCLI("ls -l --json")
+
+      expect(result.exitCode).toBe(0)
+      const parsed = JSON.parse(result.stdout)
+      expect(parsed[0]).toHaveProperty("shortHash")
+      expect(parsed[0]).toHaveProperty("subject")
+      expect(parsed[0]).toHaveProperty("ageRelative")
+      expect(parsed[0]).toHaveProperty("ageTimestamp")
+      expect(parsed[0]).toHaveProperty("dirty")
+    })
+  })
+
+  describe("list alias", () => {
+    it("should work identically to ls", () => {
+      const lsResult = testRepo.runCLI("ls")
+      const listResult = testRepo.runCLI("list")
+
+      expect(lsResult.exitCode).toBe(0)
+      expect(listResult.exitCode).toBe(0)
+      expect(listResult.stdout).toBe(lsResult.stdout)
+    })
+  })
+
+  describe("error handling", () => {
+    it("should exit with NOT_GIT_REPOSITORY (3) outside a git repo", () => {
+      const nonGit = createNonGitDir("ls-nongit")
+      try {
+        const result = runCLI("ls", nonGit.path)
+
+        expect(result.exitCode).toBe(3)
+        expect(result.combined).toContain("Not in a git repository")
+      } finally {
+        nonGit.cleanup()
+      }
+    })
   })
 })

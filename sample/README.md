@@ -99,3 +99,24 @@ cp .env.example .env
 - `DB_NAME` - データベース名
 - `APP_PORT` - Next.jsのポート
 - `JWT_SECRET` - JWT署名用シークレット
+
+## Claude Code 連携を試す
+
+このサンプルには `.claude/skills/wturbo/` を同梱していません。試したい場合は次の手順でインストールしてください:
+
+```bash
+# sample ディレクトリ内から
+../dist/cli/index.js init-claude
+git add .claude/skills/wturbo    # git 管理にしておくと worktree に自動伝播
+```
+
+その後:
+
+```bash
+../dist/cli/index.js create feature/demo
+cd ../worktree-feature-demo
+claude         # Claude Code 起動
+# プロンプトで「このworktreeのAPP_PORTは？」→ 自動で wturbo ports --json を呼んで回答
+```
+
+`wturbo ports --pretty` を手で叩いてもポート構成が確認できます。

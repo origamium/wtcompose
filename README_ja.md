@@ -215,6 +215,17 @@ JSON（`--json`）:
 wturbo ls --json | jq '.[] | select(.isMain == false) | .path'
 ```
 
+### `wturbo ports`
+
+現 worktree(または全 worktree)の `env.adjust` 調整済み値、Docker Compose の host/container ポート、`http://localhost:<port>` エンドポイント一覧を出力します。Claude Code の [skill](#claude-code連携) から呼び出される想定ですが、シェルスクリプトからも使えます。
+
+| オプション | 説明 |
+|-----------|------|
+| `--all` | 全 worktree を配列で出力（デフォルトは現在の worktree 1 件をオブジェクトで） |
+| `--pretty` | JSON ではなく人間向けテーブル |
+
+出力スキーマと利用例は [Claude Code連携](#claude-code連携) を参照。
+
 ### `wturbo status`
 
 現在のworktree一覧とDocker環境の状態を表示します。
@@ -246,6 +257,16 @@ wturbo status
    📦 Services: 3
    🔧 Environment: .env, .env.local
 ```
+
+### `wturbo init-claude`
+
+同梱の Claude Code Skill をこのリポジトリ(またはグローバル)に展開します。詳しくは [Claude Code連携](#claude-code連携) を参照。
+
+| オプション | 説明 |
+|-----------|------|
+| `-f, --force` | 既存 `SKILL.md` を上書き |
+| `--user` | リポジトリではなく `~/.claude/skills/wturbo/` にインストール |
+| `--dry-run` | 対象パスのみ出力し書き込まない |
 
 ## 設定ファイル
 
@@ -422,11 +443,96 @@ env:
 -p, --paths           絶対パスのみを1行ずつ出力
 ```
 
+### `ports` オプション
+
+```
+--all                 全worktreeを配列で出力
+--pretty              人間向けテーブル（デフォルトはJSON）
+```
+
+### `init-claude` オプション
+
+```
+-f, --force           既存 SKILL.md を上書き
+--user                ~/.claude/skills/wturbo/ にグローバル展開
+--dry-run             対象パスだけ出力
+```
+
 ## 必要環境
 
 - Node.js 18+
 - Git
 - Docker（オプション — `docker_compose_file` を設定した場合のみ必要）
+
+## Claude Code連携
+
+wturbo には [Claude Code skill](https://docs.claude.com/en/docs/claude-code/skills) が同梱されています。skill を入れると Claude Code のエージェントが自動で wturbo CLI を呼び出し、「このworktreeのポートは？」「feature/auth のworktree作って」といった依頼に直接応えられるようになります。
+
+### リポジトリに 1 回だけインストール
+
+```bash
+wturbo init-claude                          # .claude/skills/wturbo/SKILL.md を配置
+git add .claude/skills/wturbo
+git commit -m "chore: install wturbo Claude Code skill"
+```
+
+`.claude/skills/` は通常の git 管理ディレクトリなので、`git worktree add` や `wturbo create` で作ったすべての worktree に自動で伝播します。worktree ごとの仕込みは不要です。
+
+グローバル配置を選ぶ場合:
+
+```bash
+wturbo init-claude --user                   # ~/.claude/skills/wturbo/SKILL.md
+```
+
+フラグ: `-f, --force`(上書き)、`--user`(グローバル)、`--dry-run`(対象パスのみ確認)。
+
+### データソース: `wturbo ports`
+
+Skill は `wturbo ports --json` を呼び出して結果を読み取ります。シェルから直接使うこともできます:
+
+```bash
+wturbo ports                                # 現 worktree を JSON オブジェクトで
+wturbo ports --all                          # 全 worktree を JSON 配列で
+wturbo ports --pretty                       # 人間向けテーブル
+```
+
+出力スキーマ:
+
+```json
+{
+  "path": "/Users/me/worktree-feature-auth",
+  "branch": "feature/auth",
+  "env": { "APP_PORT": "3001", "DB_PORT": "5433" },
+  "compose": {
+    "file": "docker-compose.yml",
+    "services": {
+      "web": { "host_ports": [3001], "container_ports": [80] },
+      "db":  { "host_ports": [5433], "container_ports": [5432] }
+    }
+  },
+  "endpoints": ["http://localhost:3001", "http://localhost:5433"]
+}
+```
+
+ポイント:
+
+- `env` には `env.adjust` に登録した key のみが入る。`.env` 内の他の値(API キー等のシークレット)は**漏れない**。
+- `compose.services` は worktree のコピー済み Compose ファイルから読むので、**リマップ後のポート値**が得られる。
+- `endpoints` は compose の host ポートから `http://localhost:<port>` を組み立てる簡易一覧。
+- Docker 不在でも stdout は有効な JSON(`compose.services` が `{}` になるだけ)。警告は stderr。
+
+### Claude が何をできるようになるか
+
+Skill インストール後は、次のような依頼が自然に通ります:
+
+| 発言 | Claude の挙動 |
+|-----|---------------|
+| 「ここの API のポート教えて」 | `wturbo ports --json` を実行 → 該当ポートを返答 |
+| 「worktree 一覧見せて」 | `wturbo ls -l` |
+| 「feature/login の worktree 作って」 | `wturbo create feature/login`(破壊的変更は事前確認) |
+| 「feature/old 片付けて」 | `wturbo ls -l` で対象表示 → 確認 → `wturbo remove feature/old` |
+
+Skill の `description` は `wturbo.yaml` を含むリポジトリで自動発火するので、手動で呼び出す必要はほぼありません。
 
 ## トラブルシューティング
 

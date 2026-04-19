@@ -237,6 +237,14 @@ async function executeCreateCommand(
       const isNew = wt.branch === branch
       console.log(`  ${isNew ? "→" : " "} ${wt.branch}: ${wt.path}`)
     }
+
+    // Claude Code skill 未導入なら案内を 1 行だけ出す
+    if (!existsSync(path.join(gitRoot, ".claude", "skills", "wturbo"))) {
+      console.log("")
+      console.log(
+        '💡 Tip: Run "wturbo init-claude" to let Claude Code auto-detect this worktree\'s ports.'
+      )
+    }
   }
 }
 

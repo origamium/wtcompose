@@ -91,6 +91,55 @@ export interface LsCommandOptions {
   paths?: boolean
 }
 
+/**
+ * Compose サービスから抽出したホスト/コンテナポート
+ */
+export interface ComposeServicePorts {
+  host_ports: number[]
+  container_ports: number[]
+}
+
+/**
+ * `wturbo ports` コマンドが返す 1 worktree の状態
+ */
+export interface WorktreePorts {
+  /** worktreeのパス */
+  path: string
+  /** ブランチ名 */
+  branch: string
+  /** env.adjust に列挙された key に対応する現worktreeの実値 */
+  env: Record<string, string>
+  /** compose ファイル情報（docker_compose_file 未設定時は null） */
+  compose: {
+    file: string | null
+    services: Record<string, ComposeServicePorts>
+  }
+  /** host port から生成した推定エンドポイント（http://localhost:<port>） */
+  endpoints: string[]
+}
+
+/**
+ * `ports` コマンドのオプション
+ */
+export interface PortsCommandOptions {
+  /** 全worktreeを配列で出力 */
+  all?: boolean
+  /** 人間向けテーブル出力（デフォルトは JSON） */
+  pretty?: boolean
+}
+
+/**
+ * `init-claude` コマンドのオプション
+ */
+export interface InitClaudeOptions {
+  /** 既存ファイルを上書き */
+  force?: boolean
+  /** ~/.claude/skills/wturbo/ にグローバル配置 */
+  user?: boolean
+  /** 書き込まずに対象パスだけ出力 */
+  dryRun?: boolean
+}
+
 // =============================================================================
 // Docker Types
 // =============================================================================

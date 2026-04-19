@@ -10,7 +10,9 @@ import { fileURLToPath } from "node:url"
 import { Command } from "commander"
 import { APP_DESCRIPTION, APP_NAME, APP_VERSION, EXIT_CODES } from "../constants/index.js"
 import { createCommand } from "./commands/create.js"
+import { initClaudeCommand } from "./commands/init-claude.js"
 import { lsCommand } from "./commands/ls.js"
+import { portsCommand } from "./commands/ports.js"
 import { removeCommand } from "./commands/remove.js"
 import { statusCommand } from "./commands/status.js"
 
@@ -25,8 +27,10 @@ function createMainProgram(): Command {
   // サブコマンド追加
   program.addCommand(statusCommand())
   program.addCommand(lsCommand())
+  program.addCommand(portsCommand())
   program.addCommand(createCommand())
   program.addCommand(removeCommand())
+  program.addCommand(initClaudeCommand())
 
   return program
 }

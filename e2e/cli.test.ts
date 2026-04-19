@@ -1172,3 +1172,162 @@ describe("LS Command", () => {
     })
   })
 })
+
+// =============================================================================
+// PORTS COMMAND
+// =============================================================================
+
+describe("ports command", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("env-adjust", "ports")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  describe("defaults", () => {
+    it("returns a single object for the current worktree with env/compose/endpoints", () => {
+      const result = testRepo.runCLI("ports")
+      expect(result.exitCode).toBe(0)
+      const parsed = JSON.parse(result.stdout)
+      expect(Array.isArray(parsed)).toBe(false)
+      expect(parsed.branch).toBe("main")
+      // env.adjust keys should be surfaced with their source values
+      expect(parsed.env.APP_PORT).toBe("3000")
+      expect(parsed.env.DB_PORT).toBe("5432")
+      expect(parsed.env.REDIS_PORT).toBe("6379")
+      // non-listed keys must NOT leak
+      expect(parsed.env.NODE_ENV).toBeUndefined()
+      // compose info from the source compose-file
+      expect(parsed.compose.file).toBeTruthy()
+      expect(parsed.compose.services.app.host_ports).toEqual([3000])
+      expect(parsed.endpoints).toContain("http://localhost:3000")
+    })
+
+    it("exposes each worktree's adjusted env ports with --all after create", () => {
+      const createOne = testRepo.runCLI("create feature/alpha --no-start --no-docker")
+      expect(createOne.exitCode).toBe(0)
+      const createTwo = testRepo.runCLI("create feature/beta --no-start --no-docker")
+      expect(createTwo.exitCode).toBe(0)
+
+      const result = testRepo.runCLI("ports --all")
+      expect(result.exitCode).toBe(0)
+      const rows = JSON.parse(result.stdout) as Array<{
+        branch: string
+        env: Record<string, string>
+      }>
+      expect(Array.isArray(rows)).toBe(true)
+      const byBranch = Object.fromEntries(rows.map((r) => [r.branch, r]))
+      expect(byBranch.main?.env.APP_PORT).toBe("3000")
+      expect(byBranch["feature/alpha"]?.env.APP_PORT).toBe("3001")
+      expect(byBranch["feature/beta"]?.env.APP_PORT).toBe("3002")
+    })
+
+    it("--pretty renders a human-readable block", () => {
+      const result = testRepo.runCLI("ports --pretty")
+      expect(result.exitCode).toBe(0)
+      expect(result.stdout).toContain("main")
+      expect(result.stdout).toContain("env:")
+      expect(result.stdout).toContain("APP_PORT=3000")
+    })
+  })
+
+  describe("error handling", () => {
+    it("exits 3 outside a git repository", () => {
+      const nonGit = createNonGitDir("ports-nongit")
+      try {
+        const result = runCLI("ports", nonGit.path)
+        expect(result.exitCode).toBe(3)
+        expect(result.combined).toContain("Not in a git repository")
+      } finally {
+        nonGit.cleanup()
+      }
+    })
+  })
+})
+
+// =============================================================================
+// INIT-CLAUDE COMMAND
+// =============================================================================
+
+describe("init-claude command", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("basic", "init-claude")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  it("installs .claude/skills/wturbo/SKILL.md on first run", () => {
+    const result = testRepo.runCLI("init-claude")
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain("Installed wturbo Claude Code skill")
+    const skillPath = path.join(testRepo.path, ".claude/skills/wturbo/SKILL.md")
+    expect(existsSync(skillPath)).toBe(true)
+    const content = fs.readFileSync(skillPath, "utf-8")
+    expect(content).toMatch(/name: wturbo/)
+  })
+
+  it("skips when already installed without --force", () => {
+    const first = testRepo.runCLI("init-claude")
+    expect(first.exitCode).toBe(0)
+    const second = testRepo.runCLI("init-claude")
+    expect(second.exitCode).toBe(0)
+    expect(second.stdout).toContain("Skipped")
+    expect(second.stdout).toContain("already exists")
+  })
+
+  it("overwrites with --force", () => {
+    testRepo.runCLI("init-claude")
+    const skillPath = path.join(testRepo.path, ".claude/skills/wturbo/SKILL.md")
+    fs.writeFileSync(skillPath, "stale content", "utf-8")
+    const result = testRepo.runCLI("init-claude --force")
+    expect(result.exitCode).toBe(0)
+    const content = fs.readFileSync(skillPath, "utf-8")
+    expect(content).not.toBe("stale content")
+    expect(content).toMatch(/name: wturbo/)
+  })
+
+  it("--dry-run prints targets without writing", () => {
+    const result = testRepo.runCLI("init-claude --dry-run")
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain("Dry run")
+    expect(existsSync(path.join(testRepo.path, ".claude/skills/wturbo/SKILL.md"))).toBe(false)
+  })
+})
+
+// =============================================================================
+// CREATE -> init-claude Tip
+// =============================================================================
+
+describe("create command — init-claude tip", () => {
+  let testRepo: TestRepo
+
+  beforeEach(() => {
+    testRepo = createTestRepo("basic", "create-tip")
+  })
+
+  afterEach(() => {
+    testRepo.cleanup()
+  })
+
+  it("prints the init-claude tip when skill is not installed", () => {
+    const result = testRepo.runCLI("create feature/tip-1 --no-start --no-docker")
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Run "wturbo init-claude"')
+  })
+
+  it("suppresses the tip once the skill has been installed", () => {
+    const init = testRepo.runCLI("init-claude")
+    expect(init.exitCode).toBe(0)
+    const result = testRepo.runCLI("create feature/tip-2 --no-start --no-docker")
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).not.toContain('Run "wturbo init-claude"')
+  })
+})

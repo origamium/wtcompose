@@ -12,14 +12,15 @@ import { loadConfig } from "../../core/config/loader.js"
 import { getUsedPorts } from "../../core/docker/client.js"
 import {
   adjustPortsInCompose,
-  generateProjectName,
   readComposeFile,
+  resolveComposeProjectName,
   writeComposeFile,
 } from "../../core/docker/compose.js"
 import {
   copyVolume,
   discoverCloneableVolumes,
   getContainersUsingVolume,
+  getVolumeSize,
   resolveVolumeName,
   volumeExists,
 } from "../../core/docker/volume.js"
@@ -216,7 +217,7 @@ async function executeCreateCommand(
     if (skipVolumeCopy) {
       console.log("⏭️  Skipping volume clone (--no-volume-copy)")
     } else if (dryRun) {
-      console.log("📦 Would clone Docker volumes (auto-discovered from compose)")
+      previewVolumeCopy(gitRoot, config)
     } else {
       await setupVolumeCopy(gitRoot, worktreePath, config, { force: forceVolumeCopy })
     }
@@ -427,6 +428,35 @@ async function setupDockerCompose(
 }
 
 /**
+ * dry-run 時の volume clone プレビュー。実 Docker は触らない。
+ */
+function previewVolumeCopy(gitRoot: string, config: WtbConfig): void {
+  if (!config.docker_compose_file) return
+  const sourceComposePath = path.resolve(gitRoot, config.docker_compose_file)
+  if (!existsSync(sourceComposePath)) {
+    console.log("📦 Would clone Docker volumes — but compose file not found, skipping")
+    return
+  }
+  let composeConfig: ReturnType<typeof readComposeFile>
+  try {
+    composeConfig = readComposeFile(sourceComposePath)
+  } catch {
+    console.log("📦 Would clone Docker volumes — but compose file unreadable, skipping")
+    return
+  }
+  const exclude = config.volumes?.exclude ?? []
+  const cloneable = discoverCloneableVolumes(composeConfig, exclude)
+  if (cloneable.length === 0) {
+    console.log("📦 No volumes to clone (none defined in compose, all external, or all excluded)")
+    return
+  }
+  console.log(`📦 Would clone ${cloneable.length} volume(s):`)
+  for (const key of cloneable) {
+    console.log(`    - ${key}`)
+  }
+}
+
+/**
  * Compose の volumes セクションに定義された named volume を、source project から
  * target project (新 worktree) へ自動コピーする。
  *
@@ -460,8 +490,12 @@ async function setupVolumeCopy(
     return // nothing to copy — silent
   }
 
-  const sourceProject = generateProjectName(gitRoot)
-  const targetProject = generateProjectName(worktreePath)
+  // Compose の実際のプロジェクト名 (compose-spec 準拠) を解決する。
+  // `name:` が compose.yml に書かれていればそれを採用、なければディレクトリ名を
+  // Compose の正規化規則で整形する。`generateProjectName` は仕様より厳しい
+  // (underscore や dot をダッシュに置換) ため、ここでは使えない。
+  const sourceProject = resolveComposeProjectName(composeConfig, gitRoot)
+  const targetProject = resolveComposeProjectName(composeConfig, worktreePath)
   console.log("📦 Cloning Docker volumes...")
 
   let copiedCount = 0
@@ -486,23 +520,29 @@ async function setupVolumeCopy(
       continue
     }
 
-    // 稼働中コンテナチェック
+    // 稼働中コンテナチェック (Postgres などのライブコピーは破損リスク)
     const usingContainers = getContainersUsingVolume(source.name)
     if (usingContainers.length > 0 && !options.force) {
       console.log(
-        `  ⚠️  ${key}: source volume '${source.name}' is in use by ${usingContainers.join(", ")} — skipping (use --force-volume-copy to clone live)`
+        `  ⚠️  ${key}: source volume '${source.name}' is in use by ${usingContainers.join(", ")}`
+      )
+      console.log(
+        `      → skipping (run 'docker compose down' on the source side, or pass --force-volume-copy to clone live with data-corruption risk)`
       )
       skippedCount++
       continue
     }
 
-    // target が populated チェック
-    if (volumeExists(target.name) && !options.force) {
-      console.log(
-        `  ⚠️  ${key}: target volume '${target.name}' already exists — skipping (use --force-volume-copy to overwrite)`
-      )
-      skippedCount++
-      continue
+    // target に既にデータが入っているかチェック (空の volume ならコピーで上書き OK)
+    if (volumeExists(target.name)) {
+      const targetSize = getVolumeSize(target.name)
+      if (targetSize > 0 && !options.force) {
+        console.log(
+          `  ⚠️  ${key}: target volume '${target.name}' already has data — skipping (use --force-volume-copy to overwrite)`
+        )
+        skippedCount++
+        continue
+      }
     }
 
     try {

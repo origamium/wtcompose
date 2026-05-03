@@ -266,6 +266,43 @@ export function generateProjectName(projectDir: string, branchName?: string): st
 }
 
 /**
+ * Docker Compose v2 が実際に算出するプロジェクト名を解決する
+ *
+ * 優先順位:
+ * 1. `composeConfig.name` (compose.yml で `name:` が明示されていればそれをそのまま採用)
+ * 2. それ以外は workdir の basename を Compose 仕様で正規化:
+ *    - lowercase 化
+ *    - `[a-z0-9_-]` 以外の文字を **削除** (置換ではなく除去)
+ *    - 先頭が letter/digit でなければ `wtb` を prepend
+ *    - 結果が空なら "wtb-project" にフォールバック
+ *
+ * `generateProjectName` は非英数を `-` に置換するため、underscore や dot を含む
+ * ディレクトリ名で Compose の実挙動と乖離する。Volume 名解決には必ずこちらを使うこと。
+ *
+ * @param composeConfig - parse 済みの compose 設定
+ * @param workdir - compose ファイルがあるディレクトリの絶対パス
+ * @returns Compose が `<project>_<volume>` の prefix として使う実プロジェクト名
+ */
+export function resolveComposeProjectName(
+  composeConfig: ComposeConfig,
+  workdir: string,
+): string {
+  const explicit = (composeConfig as { name?: unknown }).name
+  if (typeof explicit === "string" && explicit.length > 0) {
+    return explicit
+  }
+  const baseName = workdir.split("/").pop() || ""
+  const stripped = baseName.toLowerCase().replace(/[^a-z0-9_-]/g, "")
+  if (stripped.length === 0) {
+    return "wtb-project"
+  }
+  if (!/^[a-z0-9]/.test(stripped)) {
+    return `wtb${stripped}`
+  }
+  return stripped
+}
+
+/**
  * Docker Compose設定の妥当性をチェック
  *
  * @param config - チェックする設定オブジェクト

@@ -48,6 +48,9 @@ export const DEFAULT_CONFIG = {
     file: ["./.env"],
     adjust: {},
   },
+  volumes: {
+    exclude: [] as string[],
+  },
 } as const
 
 // =============================================================================

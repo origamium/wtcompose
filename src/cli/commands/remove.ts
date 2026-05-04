@@ -9,15 +9,17 @@ import * as path from "node:path"
 import { Command } from "commander"
 import { EXIT_CODES } from "../../constants/index.js"
 import { loadConfig } from "../../core/config/loader.js"
-import { getGitRoot, isGitRepository } from "../../core/git/repository.js"
+import { getGitRootOrThrow } from "../../core/git/repository.js"
 import { getWorktreePath, listWorktrees, removeWorktree } from "../../core/git/worktree.js"
 import { CLIError, getErrorMessage } from "../../utils/error.js"
 import { executeLifecycleCommand } from "../../utils/exec.js"
+import { withErrorHandling } from "../utils/command-helpers.js"
 
 interface RemoveOptions {
   force?: boolean
   docker?: boolean
   end?: boolean
+  removeVolumes?: boolean
 }
 
 /**
@@ -30,30 +32,18 @@ export function removeCommand(): Command {
     .option("-f, --force", "Force removal even if worktree has uncommitted changes")
     .option("--no-docker", "Skip Docker Compose teardown")
     .option("--no-end", "Skip end_command execution")
-    .action(async (branch: string, options: RemoveOptions) => {
-      try {
-        await executeRemoveCommand(branch, options)
-      } catch (error) {
-        if (error instanceof CLIError) {
-          console.error(`Error: ${error.message}`)
-          process.exit(error.exitCode)
-        }
-        console.error(`Error: ${getErrorMessage(error)}`)
-        process.exit(EXIT_CODES.GENERAL_ERROR)
-      }
-    })
+    .option(
+      "--remove-volumes",
+      "Also delete this worktree's Docker volumes (docker compose down -v)",
+    )
+    .action(withErrorHandling(executeRemoveCommand))
 }
 
 /**
  * removeコマンドのメイン実行ロジック
  */
 async function executeRemoveCommand(branch: string, options: RemoveOptions): Promise<void> {
-  // Git リポジトリチェック
-  if (!isGitRepository()) {
-    throw new CLIError("Not in a git repository", EXIT_CODES.NOT_GIT_REPOSITORY)
-  }
-
-  const gitRoot = getGitRoot()
+  const gitRoot = getGitRootOrThrow()
 
   // worktreeのパスを取得
   const worktreePath = getWorktreePath(branch)
@@ -84,6 +74,7 @@ async function executeRemoveCommand(branch: string, options: RemoveOptions): Pro
 
   const skipDocker = options.docker === false
   const skipEnd = options.end === false
+  const removeVolumes = options.removeVolumes === true
 
   // Docker Compose teardown
   // - Only if compose file is actually configured (avoid path.resolve("") → worktree root bug)
@@ -96,8 +87,12 @@ async function executeRemoveCommand(branch: string, options: RemoveOptions): Pro
       const worktreeComposePath = path.resolve(worktreePath, config.docker_compose_file)
       if (existsSync(worktreeComposePath)) {
         console.log("")
-        console.log("🐳 Stopping Docker Compose services...")
-        await runDockerComposeDown(worktreePath)
+        if (removeVolumes) {
+          console.log("🐳 Stopping Docker Compose services and removing volumes...")
+        } else {
+          console.log("🐳 Stopping Docker Compose services...")
+        }
+        await runDockerComposeDown(worktreePath, removeVolumes)
       }
     }
   }
@@ -138,15 +133,26 @@ async function executeRemoveCommand(branch: string, options: RemoveOptions): Pro
 /**
  * worktreeディレクトリで docker compose down を実行
  * Docker が利用できない場合は警告のみ（削除処理は継続）
+ *
+ * @param worktreePath - worktree のパス
+ * @param removeVolumes - true なら `down -v` で named volume も削除
  */
-async function runDockerComposeDown(worktreePath: string): Promise<void> {
+async function runDockerComposeDown(
+  worktreePath: string,
+  removeVolumes: boolean = false,
+): Promise<void> {
   try {
-    execSync("docker compose down", {
+    const cmd = removeVolumes ? "docker compose down -v" : "docker compose down"
+    execSync(cmd, {
       cwd: worktreePath,
       stdio: "inherit",
       shell: "/bin/sh",
     })
-    console.log("  ✅ Docker Compose services stopped")
+    console.log(
+      removeVolumes
+        ? "  ✅ Docker Compose services stopped and volumes removed"
+        : "  ✅ Docker Compose services stopped"
+    )
   } catch (error) {
     console.log(`  ⚠️  Docker Compose down skipped: ${getErrorMessage(error)}`)
     console.log("  (Continuing with worktree removal)")

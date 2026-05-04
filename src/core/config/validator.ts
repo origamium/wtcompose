@@ -176,6 +176,37 @@ export function validateConfig(config: WtbConfig, configFile: string): void {
     }
   }
 
+  // volumes の検証
+  if (config.volumes !== undefined) {
+    if (typeof config.volumes !== "object" || Array.isArray(config.volumes)) {
+      errors.push({
+        message: "volumes must be an object",
+        field: "volumes",
+        severity: "error",
+      })
+    } else {
+      if (config.volumes.exclude !== undefined) {
+        if (!Array.isArray(config.volumes.exclude)) {
+          errors.push({
+            message: "volumes.exclude must be an array of strings",
+            field: "volumes.exclude",
+            severity: "error",
+          })
+        } else {
+          config.volumes.exclude.forEach((key, index) => {
+            if (typeof key !== "string") {
+              errors.push({
+                message: `volumes.exclude[${index}] must be a string`,
+                field: `volumes.exclude[${index}]`,
+                severity: "error",
+              })
+            }
+          })
+        }
+      }
+    }
+  }
+
   // 警告を stderr に出力
   const warnings = errors.filter((e) => e.severity === "warning")
   for (const w of warnings) {

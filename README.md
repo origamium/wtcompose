@@ -2,7 +2,7 @@
 
 **Switch between multiple branch environments in an instant.**
 
-A CLI tool built on Git worktrees that gives every branch its own isolated working directory — with automatic `.env` copying, port remapping, Docker Compose isolation, and symlinks for heavy directories like `node_modules`.
+A CLI tool built on Git worktrees that gives every branch its own isolated working directory — with automatic `.env` copying, port remapping, Docker Compose isolation, **Docker volume cloning so each branch starts with the same data your main worktree has**, and symlinks for heavy directories like `node_modules`.
 
 [![npm version](https://img.shields.io/npm/v/@schemelisp/wtb.svg)](https://www.npmjs.com/package/@schemelisp/wtb)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -27,6 +27,7 @@ A CLI tool built on Git worktrees that gives every branch its own isolated worki
 - [Configuration](#configuration)
 - [Environment variable adjustment](#environment-variable-adjustment)
 - [Docker Compose integration](#docker-compose-integration)
+- [Volume cloning](#volume-cloning)
 - [Lifecycle scripts](#lifecycle-scripts)
 - [Architecture](#architecture)
 - [Development](#development)
@@ -35,6 +36,7 @@ A CLI tool built on Git worktrees that gives every branch its own isolated worki
 - [Claude Code integration](#claude-code-integration)
 - [Troubleshooting](#troubleshooting)
 - [FAQ](#faq)
+- [Changelog](#changelog)
 - [License](#license)
 
 ## Why wtb?
@@ -73,9 +75,10 @@ When you run `wtb create <branch>`, the tool walks these phases in order:
 3. **Symlink** — `link_files` entries are symlinked back to the source (existing files/dirs/symlinks are replaced safely).
 4. **Environment files** — `env.file` entries are copied; if `env.adjust` is non-empty, port-style values are bumped to the next free port that doesn't collide with other worktrees' `.env` files.
 5. **Docker Compose** — if `docker_compose_file` is configured, wtb reads it, remaps host ports around running containers, and writes the adjusted copy into the worktree.
-6. **Start command** — `start_command`, if configured, runs inside the new worktree with `/bin/sh`.
+6. **Volume clone** — every named (non-`external`) Docker volume declared in the Compose file is cloned to the new worktree's project, so e.g. PostgreSQL data carries over without re-seeding. Volumes whose source container is currently running are skipped (with a warning) to avoid corruption — stop the source side first, or pass `--force-volume-copy`. See [Volume cloning](#volume-cloning).
+7. **Start command** — `start_command`, if configured, runs inside the new worktree with `/bin/sh`.
 
-`wtb remove <branch>` runs in reverse: `docker compose down` (unless `end_command` is set), then `end_command`, then `git worktree remove`.
+`wtb remove <branch>` runs in reverse: `docker compose down` (or `down -v` with `--remove-volumes`, unless `end_command` is set), then `end_command`, then `git worktree remove`.
 
 ## Quick start
 
@@ -142,6 +145,8 @@ Creates a new worktree for `<branch>`, branching from `base_branch` unless the b
 | `--no-copy` | Skip `copy_files` |
 | `--no-link` | Skip `link_files` symlinks |
 | `--no-start` | Skip `start_command` |
+| `--no-volume-copy` | Skip cloning Docker volumes from the source project |
+| `--force-volume-copy` | Clone volumes even when the source container is running or the target volume already has data |
 | `--dry-run` | Print the plan, make no changes |
 
 Examples:
@@ -165,6 +170,7 @@ Removes the worktree that owns `<branch>`. Guards against removing the main repo
 | `-f, --force` | Pass `--force` to `git worktree remove` (uncommitted changes) |
 | `--no-docker` | Skip `docker compose down` in the worktree |
 | `--no-end` | Skip `end_command` |
+| `--remove-volumes` | Also delete this worktree's Docker volumes (`docker compose down -v`) |
 
 Ordering: Docker teardown → `end_command` → `git worktree remove`. If `end_command` is set, wtb assumes you own teardown and skips the automatic `docker compose down`.
 
@@ -289,6 +295,7 @@ If nothing is found, wtb still runs with defaults (prints a warning to stderr). 
 | `end_command` | string | — | Runs in the worktree before removal. Setting this **suppresses** the automatic `docker compose down` |
 | `env.file` | string[] | `["./.env"]` | Env files to copy into the worktree |
 | `env.adjust` | map | `{}` | Per-key adjustment (see [Environment variable adjustment](#environment-variable-adjustment)) |
+| `volumes.exclude` | string[] | `[]` | Compose volume keys to **exclude** from auto-cloning. Default: every named non-`external` volume in the Compose file is cloned. See [Volume cloning](#volume-cloning) |
 
 ### Validation
 
@@ -366,6 +373,34 @@ Notes:
 - `wtb remove` calls `docker compose down` in the worktree before removing it, unless `end_command` is set (then you own teardown) or `--no-docker` is passed.
 - Disable Compose integration entirely by omitting the field or setting it to `""`.
 
+## Volume cloning
+
+After remapping the Compose file, wtb **automatically clones every named Docker volume** declared in the Compose `volumes:` section from the source project to the new worktree's project. This is what makes a new worktree start with the same database/cache contents your main worktree already has — no manual `pg_dump | pg_restore` cycle, no re-seeding.
+
+How it works:
+
+1. wtb enumerates `volumes:` keys from the Compose file.
+2. Volumes marked `external: true` are **skipped** (they're shared by design).
+3. Source volume name is resolved as `<source_project>_<key>` (or the explicit `volumes.<key>.name` if set). Same for the target with the new worktree's project name.
+4. For each volume:
+   - **If a running container is using the source volume**, wtb skips it with a warning (live filesystem copy of an active database is unsafe — Postgres/MySQL/Redis can corrupt). Stop the source side with `docker compose down` first, or pass `--force-volume-copy` to clone live anyway.
+   - **If the target volume already has data**, wtb skips it (assumes you've already populated it). Pass `--force-volume-copy` to overwrite.
+   - Otherwise, wtb does a recursive copy via a transient `instrumentisto/rsync-ssh` sidecar container (with an Alpine `cp -a` fallback if rsync isn't available).
+
+Selectively exclude volumes you don't want to clone (e.g. regenerable caches):
+
+```yaml
+# wtb.yaml
+volumes:
+  exclude:
+    - cache_data
+    - tmp_data
+```
+
+Disable the whole phase per-invocation with `wtb create <branch> --no-volume-copy`. Force-clone running source volumes (data-loss risk, dev only) with `--force-volume-copy`.
+
+`wtb remove <branch>` does **not** delete cloned volumes by default (consistent with `docker compose down`). Pass `wtb remove <branch> --remove-volumes` to also drop them (`docker compose down -v`).
+
 ## Lifecycle scripts
 
 `start_command` and `end_command` run inside the worktree with `cwd` set to the worktree root and a `/bin/sh` shell. For `start_command`, wtb first tries resolving the string as a path relative to the worktree (so `./scripts/setup.sh` works); if the file doesn't exist it's passed to the shell as-is (so `npm install && npm run dev` also works).
@@ -377,8 +412,8 @@ Script failures are **non-fatal** — wtb prints a warning and the worktree is l
 ```
 src/
 ├── cli/
-│   ├── commands/      create, remove, ls, status
-│   ├── utils/         ls renderers, progress helpers
+│   ├── commands/      create, remove, ls, ports, status, init-claude
+│   ├── utils/         worktree/ports renderers, command error wrapper, claude skill installer
 │   └── index.ts       commander wiring + global error handlers
 ├── core/
 │   ├── config/        YAML loader + validator + defaults merge
@@ -390,6 +425,8 @@ src/
 ├── constants/         defaults, command templates, regex, exit codes
 └── index.ts           library entry point
 ```
+
+For full module-by-module API surface and design rationale, see [ARCHITECTURE.md](ARCHITECTURE.md).
 
 Key design choices:
 
@@ -564,6 +601,10 @@ Yes — but lifecycle scripts, Docker integration, and port remapping are mostly
 **Why the "wtb" name?**
 Short for "worktree turbo" — git worktrees, but with the environment-wrangling turbocharged.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
 ## License
 
-MIT
+[MIT](LICENSE) © ONOUE Origami

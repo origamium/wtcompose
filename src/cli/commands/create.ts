@@ -13,14 +13,25 @@ import { getUsedPorts } from "../../core/docker/client.js"
 import {
   adjustPortsInCompose,
   readComposeFile,
+  resolveComposeProjectName,
   writeComposeFile,
 } from "../../core/docker/compose.js"
+import {
+  copyVolume,
+  discoverCloneableVolumes,
+  getContainersUsingVolume,
+  getVolumeSize,
+  resolveVolumeName,
+  volumeExists,
+} from "../../core/docker/volume.js"
 import { copyAndAdjustEnvFile, parseEnvFile } from "../../core/environment/processor.js"
-import { branchExists, getGitRoot, isGitRepository } from "../../core/git/repository.js"
+import { branchExists, getGitRootOrThrow } from "../../core/git/repository.js"
 import { createWorktree, getWorktreePath, listWorktrees } from "../../core/git/worktree.js"
 import type { WtbConfig } from "../../types/index.js"
 import { CLIError, getErrorMessage } from "../../utils/error.js"
 import { executeLifecycleCommand } from "../../utils/exec.js"
+import { withErrorHandling } from "../utils/command-helpers.js"
+import { createVolumeCopyProgressHandler } from "../utils/progress.js"
 
 interface CreateOptions {
   path?: string
@@ -30,6 +41,8 @@ interface CreateOptions {
   copy?: boolean
   link?: boolean
   start?: boolean
+  volumeCopy?: boolean
+  forceVolumeCopy?: boolean
   dryRun?: boolean
 }
 
@@ -47,19 +60,13 @@ export function createCommand(): Command {
     .option("--no-copy", "Skip file copying")
     .option("--no-link", "Skip symlink creation")
     .option("--no-start", "Skip start_command execution")
+    .option("--no-volume-copy", "Skip cloning Docker volumes from the source project")
+    .option(
+      "--force-volume-copy",
+      "Clone volumes even when the source container is running or the target volume already has data",
+    )
     .option("--dry-run", "Show what would be done without making changes")
-    .action(async (branch: string, options: CreateOptions) => {
-      try {
-        await executeCreateCommand(branch, options)
-      } catch (error) {
-        if (error instanceof CLIError) {
-          console.error(`Error: ${error.message}`)
-          process.exit(error.exitCode)
-        }
-        console.error(`Error: ${getErrorMessage(error)}`)
-        process.exit(EXIT_CODES.GENERAL_ERROR)
-      }
-    })
+    .action(withErrorHandling(executeCreateCommand))
 }
 
 /**
@@ -69,12 +76,7 @@ async function executeCreateCommand(
   branch: string,
   options: CreateOptions
 ): Promise<void> {
-  // Git リポジトリチェック
-  if (!isGitRepository()) {
-    throw new CLIError("Not in a git repository", EXIT_CODES.NOT_GIT_REPOSITORY)
-  }
-
-  const gitRoot = getGitRoot()
+  const gitRoot = getGitRootOrThrow()
 
   // 既存のworktreeチェック
   const existingPath = getWorktreePath(branch)
@@ -98,6 +100,8 @@ async function executeCreateCommand(
   const skipCopy = options.copy === false
   const skipLink = options.link === false
   const skipStart = options.start === false
+  const skipVolumeCopy = options.volumeCopy === false
+  const forceVolumeCopy = options.forceVolumeCopy === true
   const dryRun = options.dryRun === true
 
   if (dryRun) {
@@ -203,6 +207,19 @@ async function executeCreateCommand(
       }
     } else {
       await setupDockerCompose(gitRoot, worktreePath, config)
+    }
+  }
+
+  // Volume clone phase (named volumes from compose are auto-cloned to the new
+  // worktree's project so e.g. PostgreSQL data carries over).
+  if (config.docker_compose_file && !skipDocker) {
+    console.log("")
+    if (skipVolumeCopy) {
+      console.log("⏭️  Skipping volume clone (--no-volume-copy)")
+    } else if (dryRun) {
+      previewVolumeCopy(gitRoot, config)
+    } else {
+      await setupVolumeCopy(gitRoot, worktreePath, config, { force: forceVolumeCopy })
     }
   }
 
@@ -408,6 +425,151 @@ async function setupDockerCompose(
   } catch (error) {
     console.log(`  ⚠️  Docker Compose setup skipped: ${getErrorMessage(error)}`)
   }
+}
+
+/**
+ * dry-run 時の volume clone プレビュー。実 Docker は触らない。
+ */
+function previewVolumeCopy(gitRoot: string, config: WtbConfig): void {
+  if (!config.docker_compose_file) return
+  const sourceComposePath = path.resolve(gitRoot, config.docker_compose_file)
+  if (!existsSync(sourceComposePath)) {
+    console.log("📦 Would clone Docker volumes — but compose file not found, skipping")
+    return
+  }
+  let composeConfig: ReturnType<typeof readComposeFile>
+  try {
+    composeConfig = readComposeFile(sourceComposePath)
+  } catch {
+    console.log("📦 Would clone Docker volumes — but compose file unreadable, skipping")
+    return
+  }
+  const exclude = config.volumes?.exclude ?? []
+  const cloneable = discoverCloneableVolumes(composeConfig, exclude)
+  if (cloneable.length === 0) {
+    console.log("📦 No volumes to clone (none defined in compose, all external, or all excluded)")
+    return
+  }
+  console.log(`📦 Would clone ${cloneable.length} volume(s):`)
+  for (const key of cloneable) {
+    console.log(`    - ${key}`)
+  }
+}
+
+/**
+ * Compose の volumes セクションに定義された named volume を、source project から
+ * target project (新 worktree) へ自動コピーする。
+ *
+ * - external な volume はスキップ (共有意図)
+ * - config.volumes.exclude に含まれる key はスキップ
+ * - source volume が存在しない、稼働中コンテナが使用中、target が既にデータ保持中
+ *   の場合は警告してスキップ (force=true で強行可能。target 側はクリア後コピー)
+ *
+ * @internal exported for unit testing
+ */
+export async function setupVolumeCopy(
+  gitRoot: string,
+  worktreePath: string,
+  config: WtbConfig,
+  options: { force?: boolean }
+): Promise<void> {
+  if (!config.docker_compose_file) return
+
+  const sourceComposePath = path.resolve(gitRoot, config.docker_compose_file)
+  if (!existsSync(sourceComposePath)) return
+
+  let composeConfig: ReturnType<typeof readComposeFile>
+  try {
+    composeConfig = readComposeFile(sourceComposePath)
+  } catch (error) {
+    console.log(`📦 Volume clone skipped: cannot read compose file (${getErrorMessage(error)})`)
+    return
+  }
+
+  const exclude = config.volumes?.exclude ?? []
+  const cloneable = discoverCloneableVolumes(composeConfig, exclude)
+  if (cloneable.length === 0) {
+    return // nothing to copy — silent
+  }
+
+  // Compose の実際のプロジェクト名 (compose-spec 準拠) を解決する。
+  // `name:` が compose.yml に書かれていればそれを採用、なければディレクトリ名を
+  // Compose の正規化規則で整形する。`generateProjectName` は仕様より厳しい
+  // (underscore や dot をダッシュに置換) ため、ここでは使えない。
+  const sourceProject = resolveComposeProjectName(composeConfig, gitRoot)
+  const targetProject = resolveComposeProjectName(composeConfig, worktreePath)
+  console.log("📦 Cloning Docker volumes...")
+
+  let copiedCount = 0
+  let skippedCount = 0
+
+  for (const key of cloneable) {
+    const source = resolveVolumeName(composeConfig, key, sourceProject)
+    const target = resolveVolumeName(composeConfig, key, targetProject)
+    if (!source || !target) {
+      // discoverCloneableVolumes が external を弾いているのでここには来ない想定
+      continue
+    }
+    if (source.external) {
+      // 念のためのガード
+      continue
+    }
+
+    // source 存在チェック
+    if (!volumeExists(source.name)) {
+      console.log(`  ℹ️  ${key}: source volume '${source.name}' does not exist yet — skipping`)
+      skippedCount++
+      continue
+    }
+
+    // 稼働中コンテナチェック (Postgres などのライブコピーは破損リスク)
+    const usingContainers = getContainersUsingVolume(source.name)
+    if (usingContainers.length > 0 && !options.force) {
+      console.log(
+        `  ⚠️  ${key}: source volume '${source.name}' is in use by ${usingContainers.join(", ")}`
+      )
+      console.log(
+        `      → skipping (run 'docker compose down' on the source side, or pass --force-volume-copy to clone live with data-corruption risk)`
+      )
+      skippedCount++
+      continue
+    }
+
+    // target に既にデータが入っているかチェック (空の volume ならコピーで上書き OK)
+    let targetHadData = false
+    if (volumeExists(target.name)) {
+      const targetSize = getVolumeSize(target.name)
+      if (targetSize > 0) {
+        if (!options.force) {
+          console.log(
+            `  ⚠️  ${key}: target volume '${target.name}' already has data — skipping (use --force-volume-copy to overwrite)`
+          )
+          skippedCount++
+          continue
+        }
+        // force=true: target に古いファイルが残ったままにならないよう、コピー前に
+        // target を消去する (rsync は --delete、cp は find -delete でこの semantics
+        // を実現)。これがないと cp フォールバック時に "上書き" の約束が破れる。
+        targetHadData = true
+      }
+    }
+
+    try {
+      await copyVolume(source.name, target.name, {
+        onProgress: createVolumeCopyProgressHandler(`  📦 ${key}`),
+        clearTarget: targetHadData,
+      })
+      console.log(`  ✅ Cloned ${source.name} → ${target.name}`)
+      copiedCount++
+    } catch (error) {
+      console.log(`  ❌ Failed to clone ${key}: ${getErrorMessage(error)}`)
+      skippedCount++
+    }
+  }
+
+  console.log(
+    `  → ${copiedCount} volume(s) cloned, ${skippedCount} skipped`
+  )
 }
 
 /**

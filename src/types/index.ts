@@ -18,6 +18,18 @@ export interface EnvConfig {
 }
 
 /**
+ * Volume クローン設定
+ *
+ * デフォルトでは compose ファイルの `volumes:` セクションに定義された
+ * 全ての non-external な named volume を auto-discovery でコピーする。
+ * `exclude` で個別に除外可能。
+ */
+export interface VolumesConfig {
+  /** クローンから除外する compose volume key 一覧 (例: ["cache_data"])。デフォルト: [] */
+  exclude: string[]
+}
+
+/**
  * wtb設定ファイルの型定義
  */
 export interface WtbConfig {
@@ -35,6 +47,8 @@ export interface WtbConfig {
   end_command?: string
   /** 環境変数設定 */
   env: EnvConfig
+  /** Volume クローン設定（省略可、未設定でも auto-discovery は ON） */
+  volumes?: VolumesConfig
 }
 
 // =============================================================================
